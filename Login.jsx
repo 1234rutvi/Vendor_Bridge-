@@ -1,0 +1,120 @@
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import logoImg from '../assets/logo1.png';
+
+export default function Login({ onLoginSuccess }) {
+  const navigate = useNavigate();
+  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [usersDb, setUsersDb] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('vb_users');
+    if (saved) {
+      setUsersDb(JSON.parse(saved));
+    } else {
+      const defaultUsers = [
+        { email: 'admin@bridge.com', username: 'admin', password: 'Password@123', firstName: 'System', lastName: 'Admin', role: 'admin', phone: '+1234567890' }
+      ];
+      localStorage.setItem('vb_users', JSON.stringify(defaultUsers));
+      setUsersDb(defaultUsers);
+    }
+  }, []);
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    setLoginError('');
+
+    if (!loginData.username || !loginData.password) {
+      setLoginError('Please enter both username/email and password.');
+      return;
+    }
+
+    const foundUser = usersDb.find(u => 
+      (u.email.toLowerCase() === loginData.username.toLowerCase() || u.username === loginData.username)
+    );
+
+    if (!foundUser) {
+      setLoginError('No account found with that username/email.');
+      return;
+    }
+
+    if (foundUser.password !== loginData.password) {
+      setLoginError('Incorrect password. Please try again.');
+      return;
+    }
+
+    onLoginSuccess(foundUser);
+  };
+
+  return (
+    <div className="auth-wrapper">
+      <div className="glass-panel auth-card animate-fade-in">
+        <div className="auth-header">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            <img 
+              src={logoImg} 
+              alt="Vendor Bridge Logo" 
+              style={{ height: '80px', objectFit: 'contain' }} 
+            />
+          </div>
+        </div>
+
+        <form onSubmit={handleLoginSubmit} className="auth-form">
+          {loginError && (
+            <div className="auth-error-msg" style={{ background: 'rgba(239, 68, 68, 0.08)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+              <AlertCircle size={16} />
+              <span>{loginError}</span>
+            </div>
+          )}
+          
+          <div>
+            <label className="auth-label">Email</label>
+            <div className="auth-input-icon-wrapper">
+              <Mail size={16} className="auth-input-icon" />
+              <input
+                type="text"
+                placeholder="admin@bridge.com or admin"
+                value={loginData.username}
+                onChange={e => setLoginData({ ...loginData, username: e.target.value })}
+                className="form-input auth-input-with-icon"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="auth-label">Password</label>
+            <div className="auth-input-icon-wrapper">
+              <Lock size={16} className="auth-input-icon" />
+              <input
+                type="password"
+                placeholder="••••••••••••"
+                value={loginData.password}
+                onChange={e => setLoginData({ ...loginData, password: e.target.value })}
+                className="form-input auth-input-with-icon"
+              />
+            </div>
+            <span 
+              className="forgot-password-link" 
+              onClick={() => navigate('/forgot')}
+            >
+              Forgot Password?
+            </span>
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }}>
+            Sign In to Dashboard
+          </button>
+
+          <div className="auth-footer">
+            Don't have an account?{' '}
+            <span className="auth-link" onClick={() => navigate('/signup')}>
+              Create Account
+            </span>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
