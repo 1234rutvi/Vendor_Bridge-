@@ -1,0 +1,225 @@
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Phone, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import logoImg from '../assets/logo1.png';
+import { validateEmail, validatePhone, checkPasswordStrength, getStrengthBarClass } from '../utils/validation';
+
+export default function SignUp({ onLoginSuccess }) {
+  const navigate = useNavigate();
+  
+  const [signupData, setSignupData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: 'officer',
+    password: ''
+  });
+  const [signupErrors, setSignupErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [usersDb, setUsersDb] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('vb_users');
+    if (saved) {
+      setUsersDb(JSON.parse(saved));
+    }
+  }, []);
+
+  const handleSignupSubmit = (e) => {
+    e.preventDefault();
+    const errors = {};
+
+    if (!signupData.firstName.trim()) errors.firstName = 'First name is required.';
+    if (!signupData.lastName.trim()) errors.lastName = 'Last name is required.';
+    
+    if (!signupData.email) {
+      errors.email = 'Email address is required.';
+    } else if (!validateEmail(signupData.email)) {
+      errors.email = 'Please enter a valid email format (e.g. name@domain.com).';
+    } else if (usersDb.some(u => u.email.toLowerCase() === signupData.email.toLowerCase())) {
+      errors.email = 'An account with this email already exists.';
+    }
+
+    if (!signupData.phone) {
+      errors.phone = 'Phone number is required.';
+    } else if (!validatePhone(signupData.phone)) {
+      errors.phone = 'Invalid phone number format (7 to 15 digits).';
+    }
+
+    const { score, checks } = checkPasswordStrength(signupData.password);
+    if (!signupData.password) {
+      errors.password = 'Password is required.';
+    } else if (!checks.length) {
+      errors.password = 'Password must be at least 8 characters long.';
+    } else if (score < 5) {
+      errors.password = 'Password must be strong: need lowercase, uppercase, number, and special character.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setSignupErrors(errors);
+      return;
+    }
+
+    const newUser = {
+      email: signupData.email,
+      username: signupData.email.split('@')[0],
+      password: signupData.password,
+      firstName: signupData.firstName,
+      lastName: signupData.lastName,
+      role: signupData.role,
+      phone: signupData.phone
+    };
+
+    const updatedDb = [...usersDb, newUser];
+    localStorage.setItem('vb_users', JSON.stringify(updatedDb));
+    
+    onLoginSuccess(newUser);
+  };
+
+  return (
+    <div className="auth-wrapper">
+      <div className="glass-panel auth-card animate-fade-in">
+        <div className="auth-header">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            <img 
+              src={logoImg} 
+              alt="Vendor Bridge Logo" 
+              style={{ height: '80px', objectFit: 'contain' }} 
+            />
+          </div>
+          <p className="auth-subtitle">Create a partner or admin integration portal</p>
+        </div>
+
+        <form onSubmit={handleSignupSubmit} className="auth-form">
+          <div className="auth-form-row">
+            <div>
+              <label className="auth-label">First Name</label>
+              <div className="auth-input-icon-wrapper">
+                <User size={16} className="auth-input-icon" />
+                <input
+                  type="text"
+                  placeholder="Jane"
+                  value={signupData.firstName}
+                  onChange={e => setSignupData({ ...signupData, firstName: e.target.value })}
+                  className="form-input auth-input-with-icon"
+                />
+              </div>
+              {signupErrors.firstName && <div className="auth-error-msg"><AlertCircle size={12} /> {signupErrors.firstName}</div>}
+            </div>
+            <div>
+              <label className="auth-label">Last Name</label>
+              <div className="auth-input-icon-wrapper">
+                <User size={16} className="auth-input-icon" />
+                <input
+                  type="text"
+                  placeholder="Doe"
+                  value={signupData.lastName}
+                  onChange={e => setSignupData({ ...signupData, lastName: e.target.value })}
+                  className="form-input auth-input-with-icon"
+                />
+              </div>
+              {signupErrors.lastName && <div className="auth-error-msg"><AlertCircle size={12} /> {signupErrors.lastName}</div>}
+            </div>
+          </div>
+
+          <div>
+            <label className="auth-label">Email Address</label>
+            <div className="auth-input-icon-wrapper">
+              <Mail size={16} className="auth-input-icon" />
+              <input
+                type="email"
+                placeholder="jane.doe@company.com"
+                value={signupData.email}
+                onChange={e => setSignupData({ ...signupData, email: e.target.value })}
+                className="form-input auth-input-with-icon"
+              />
+            </div>
+            {signupErrors.email && <div className="auth-error-msg"><AlertCircle size={12} /> {signupErrors.email}</div>}
+          </div>
+
+          <div className="auth-form-row">
+            <div>
+              <label className="auth-label">Phone Number</label>
+              <div className="auth-input-icon-wrapper">
+                <Phone size={16} className="auth-input-icon" />
+                <input
+                  type="text"
+                  placeholder="+1 (555) 019-2834"
+                  value={signupData.phone}
+                  onChange={e => setSignupData({ ...signupData, phone: e.target.value })}
+                  className="form-input auth-input-with-icon"
+                />
+              </div>
+              {signupErrors.phone && <div className="auth-error-msg"><AlertCircle size={12} /> {signupErrors.phone}</div>}
+            </div>
+            <div>
+              <label className="auth-label">System Role</label>
+              <select
+                value={signupData.role}
+                onChange={e => setSignupData({ ...signupData, role: e.target.value })}
+                className="form-input"
+                style={{ background: 'rgba(0,0,0,0.4)', color: 'white' }}
+              >
+                <option value="admin">Admin Manager</option>
+                <option value="officer">Data Officer</option>
+                <option value="vendor">Vendor Operator</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="auth-label">Secure Password</label>
+            <div className="auth-input-icon-wrapper">
+              <Lock size={16} className="auth-input-icon" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••••••"
+                value={signupData.password}
+                onChange={e => setSignupData({ ...signupData, password: e.target.value })}
+                className="form-input auth-input-with-icon"
+              />
+              <div 
+                onClick={() => setShowPassword(!showPassword)} 
+                style={{ position: 'absolute', right: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                {showPassword ? <EyeOff size={16} color="var(--text-dark)" /> : <Eye size={16} color="var(--text-dark)" />}
+              </div>
+            </div>
+            
+            {signupData.password && (
+              <div>
+                <div className="auth-strength-meter">
+                  {[0, 1, 2, 3, 4].map((idx) => {
+                    const { checks } = checkPasswordStrength(signupData.password);
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`auth-strength-bar ${getStrengthBarClass(checks, idx)}`}
+                      ></div>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dark)', marginTop: '4px', display: 'block' }}>
+                  Password requires: 8+ chars, uppercase, lowercase, digit, and symbol.
+                </span>
+              </div>
+            )}
+            {signupErrors.password && <div className="auth-error-msg"><AlertCircle size={12} /> {signupErrors.password}</div>}
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }}>
+            Create Account & Log In
+          </button>
+
+          <div className="auth-footer">
+            Already have an account?{' '}
+            <span className="auth-link" onClick={() => navigate('/login')}>
+              Log In
+            </span>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
