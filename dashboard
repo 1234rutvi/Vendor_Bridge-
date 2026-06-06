@@ -1,0 +1,1722 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  CheckSquare, 
+  FileText, 
+  ShoppingBag, 
+  AlertCircle, 
+  Plus, 
+  Check, 
+  X, 
+  RefreshCw, 
+  Search, 
+  DollarSign, 
+  User
+} from 'lucide-react';
+
+// Roles greeting translation mapping
+const getRoleLabel = (role) => {
+  switch (role) {
+    case 'admin':
+      return 'System Admin';
+    case 'officer':
+      return 'Procurement Officer';
+    case 'vendor':
+      return 'Vendor Operator';
+    default:
+      return 'Procurement Officer';
+  }
+};
+
+export default function DashboardOverview({ currentUser, onNavigate, stats = {}, triggerSync, isSyncing }) {
+  const roleLabel = currentUser ? getRoleLabel(currentUser.role) : 'Procurement Officer';
+
+  // --- Stateful Procurement Mock Data ---
+  const [approvals, setApprovals] = useState([
+    { id: 'app-1', title: 'Industrial Grade Server Upgrade', vendor: 'Tech Core', amount: 12500, requestor: 'Sarah Jenkins', date: '2026-06-05', type: 'Purchase Requisition' },
+    { id: 'app-2', title: 'High-Performance Fiber Optic Cables', vendor: 'Infra', amount: 3200, requestor: 'David Miller', date: '2026-06-06', type: 'Price Deviation' },
+    { id: 'app-3', title: 'Warehouse Storage Rack Installation', vendor: 'OfficeNeed Co', amount: 8900, requestor: 'Elena Rostova', date: '2026-06-04', type: 'Contract Approval' }
+  ]);
+
+  const [rfqs, setRfqs] = useState([
+    { id: 'rfq-1', rfqNo: 'RFQ-2026-008', title: 'High-Capacity SSDs & RAM Blocks', vendorCount: 4, deadline: '2026-06-12', status: 'Bidding Open', budget: 15000 },
+    { id: 'rfq-2', rfqNo: 'RFQ-2026-009', title: 'Ergonomic Standing Desks Phase 2', vendorCount: 2, deadline: '2026-06-18', status: 'Draft', budget: 6500 },
+    { id: 'rfq-3', rfqNo: 'RFQ-2026-010', title: 'Custom Aluminum Extrusion Brackets', vendorCount: 5, deadline: '2026-06-10', status: 'Bids Received', budget: 24000 }
+  ]);
+
+  const [purchaseOrders, setPurchaseOrders] = useState([
+    { id: 'po-1', poNo: 'PO-2026-091', vendor: 'Infra', amount: 87000, date: '2026-06-06', status: 'Approved', syncStatus: 'synced' },
+    { id: 'po-2', poNo: 'PO-2026-092', vendor: 'Tech Core', amount: 140000, date: '2026-06-05', status: 'Pending', syncStatus: 'pending' },
+    { id: 'po-3', poNo: 'PO-2026-093', vendor: 'OfficeNeed Co', amount: 34900, date: '2026-06-04', status: 'Draft', syncStatus: 'unsynced' }
+  ]);
+
+  const [invoices, setInvoices] = useState([
+    { id: 'inv-1', invNo: 'INV-78901', poRef: 'PO-2026-091', vendor: 'Infra', amount: 12000, dueDate: '2026-06-15', status: 'Open', syncStatus: 'synced' },
+    { id: 'inv-2', invNo: 'INV-78902', poRef: 'PO-2026-093', vendor: 'OfficeNeed Co', amount: 4500, dueDate: '2026-06-02', status: 'Overdue', syncStatus: 'synced' },
+    { id: 'inv-3', invNo: 'INV-78903', poRef: 'PO-2026-092', vendor: 'Tech Core', amount: 87000, dueDate: '2026-07-01', status: 'Paid', syncStatus: 'synced' }
+  ]);
+
+  // --- Interaction States ---
+  const [activeTab, setActiveTab] = useState('pos'); // 'pos', 'invoices', 'rfqs'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showRfqModal, setShowRfqModal] = useState(false);
+  const [newRfqData, setNewRfqData] = useState({ title: '', budget: '', vendor: '', deadline: '' });
+  const [toasts, setToasts] = useState([]);
+  const [removingApprovalId, setRemovingApprovalId] = useState(null);
+  const [highlightedCard, setHighlightedCard] = useState(null);
+  const [hoveredChartItem, setHoveredChartItem] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // --- Spending Trends Calculations ---
+  const chartData = [
+    { month: 'Jan', total: 45000, infra: 25000, office: 10000, hardware: 6000, software: 4000 },
+    { month: 'Feb', total: 68000, infra: 38000, office: 12000, hardware: 11000, software: 7000 },
+    { month: 'Mar', total: 55000, infra: 30000, office: 9000, hardware: 10000, software: 6000 },
+    { month: 'Apr', total: 90000, infra: 54000, office: 16000, hardware: 12000, software: 8000 },
+    { month: 'May', total: 75000, infra: 45000, office: 13000, hardware: 10000, software: 7000 },
+    { month: 'Jun', total: 115000, infra: 72000, office: 18000, hardware: 15000, software: 10000 },
+  ];
+
+  const categoryConfig = {
+    all: { label: 'All Spent', color: '#6366f1', gradientId: 'grad-all' },
+    infra: { label: 'Infrastructure', color: '#38bdf8', gradientId: 'grad-infra' },
+    office: { label: 'Office Supplies', color: '#34d399', gradientId: 'grad-office' },
+    hardware: { label: 'Hardware', color: '#f87171', gradientId: 'grad-hardware' },
+    software: { label: 'Software', color: '#fbbf24', gradientId: 'grad-software' }
+  };
+
+  const activeConf = categoryConfig[selectedCategory] || categoryConfig.all;
+  const maxVal = selectedCategory === 'all' ? 120000 : selectedCategory === 'infra' ? 80000 : selectedCategory === 'office' ? 25000 : selectedCategory === 'hardware' ? 20000 : 15000;
+  
+  const pts = chartData.map((d, i) => {
+    const val = selectedCategory === 'all' ? d.total : d[selectedCategory];
+    const x = 50 + i * 72;
+    const y = 150 - (val / maxVal) * 110;
+    return { x, y, val, month: d.month };
+  });
+
+  const linePath = `M ${pts.map(p => `${p.x} ${p.y}`).join(' L ')}`;
+  const areaPath = `${linePath} L ${pts[pts.length - 1].x} 150 L ${pts[0].x} 150 Z`;
+
+  // --- Toast Trigger Helper ---
+  const showToast = (message, type = 'success') => {
+    const newToast = { id: Date.now(), message, type };
+    setToasts(prev => [...prev, newToast]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== newToast.id));
+    }, 4000);
+  };
+
+  // --- Odoo Sync Monitor ---
+  useEffect(() => {
+    if (isSyncing) {
+      showToast('Connecting Odoo v17 Bridge: Syncing procurement databases...', 'info');
+    } else if (stats.lastSync && stats.lastSync !== 'Never') {
+      showToast('Odoo bridge databases synchronized successfully!', 'success');
+      // Randomly mock pull of a new purchase order or invoice from Odoo
+      if (Math.random() > 0.4) {
+        const vendorsList = ['Amazon US Marketplace', 'Shopify Storefront (Retail)', 'Walmart Wholesale Portal'];
+        const randomVendor = vendorsList[Math.floor(Math.random() * vendorsList.length)];
+        const amount = Math.floor(Math.random() * 45000) + 5000;
+        const newPoNo = `PO-2026-09${purchaseOrders.length + 4}`;
+        
+        setPurchaseOrders(prev => [
+          {
+            id: `po-${Date.now()}`,
+            poNo: newPoNo,
+            vendor: randomVendor,
+            amount: amount,
+            date: new Date().toISOString().split('T')[0],
+            status: 'Approved',
+            syncStatus: 'synced'
+          },
+          ...prev
+        ]);
+      }
+    }
+  }, [isSyncing]);
+
+  // --- Dynamic Stats Calculations ---
+  const activeRfqsCount = rfqs.length;
+  const pendingApprovalsCount = approvals.length;
+  const overdueInvoicesCount = invoices.filter(inv => inv.status === 'Overdue').length;
+
+  const getPoVolumeStr = () => {
+    const totalPoSum = purchaseOrders.reduce((sum, po) => sum + po.amount, 0);
+    if (totalPoSum >= 100000) {
+      return `$ ${(totalPoSum / 100000).toFixed(1)}L`;
+    }
+    return `$ ${(totalPoSum / 1000).toFixed(1)}K`;
+  };
+
+  // --- Approval Queue Actions ---
+  const handleResolveApproval = (id, action, title) => {
+    setRemovingApprovalId(id);
+    setTimeout(() => {
+      setApprovals(prev => prev.filter(item => item.id !== id));
+      setRemovingApprovalId(null);
+      showToast(
+        action === 'approve' 
+          ? `Approved request: "${title}"` 
+          : `Declined request: "${title}"`,
+        action === 'approve' ? 'success' : 'error'
+      );
+    }, 300);
+  };
+
+  // --- Invoice Payment Actions ---
+  const handlePayInvoice = (id, invNo) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === id) {
+        showToast(`Invoice ${invNo} marked as Paid & queued for Odoo reconciliation.`);
+        return { ...inv, status: 'Paid' };
+      }
+      return inv;
+    }));
+  };
+
+  // --- Create RFQ Form Submission ---
+  const handleCreateRfq = (e) => {
+    e.preventDefault();
+    if (!newRfqData.title || !newRfqData.deadline) {
+      showToast('Please specify a Title and Deadline.', 'error');
+      return;
+    }
+    const newRfq = {
+      id: `rfq-${Date.now()}`,
+      rfqNo: `RFQ-2026-0${rfqs.length + 9}`,
+      title: newRfqData.title,
+      vendorCount: 0,
+      deadline: newRfqData.deadline,
+      status: 'Draft',
+      budget: Number(newRfqData.budget) || 0
+    };
+    setRfqs(prev => [newRfq, ...prev]);
+    setShowRfqModal(false);
+    setNewRfqData({ title: '', budget: '', vendor: '', deadline: '' });
+    setActiveTab('rfqs');
+    showToast(`Successfully created ${newRfq.rfqNo}!`);
+  };
+
+  // --- Filter Logic for Activity Lists ---
+  const getFilteredData = () => {
+    const q = searchQuery.toLowerCase();
+    switch (activeTab) {
+      case 'pos':
+        return purchaseOrders.filter(po => 
+          po.poNo.toLowerCase().includes(q) || 
+          po.vendor.toLowerCase().includes(q)
+        );
+      case 'invoices':
+        return invoices.filter(inv => 
+          inv.invNo.toLowerCase().includes(q) || 
+          inv.vendor.toLowerCase().includes(q) || 
+          inv.poRef.toLowerCase().includes(q)
+        );
+      case 'rfqs':
+        return rfqs.filter(rfq => 
+          rfq.rfqNo.toLowerCase().includes(q) || 
+          rfq.title.toLowerCase().includes(q)
+        );
+      default:
+        return [];
+    }
+  };
+
+  const currentListData = getFilteredData();
+
+  // --- Dynamic Highlight for Stats click ---
+  const handleCardClick = (tabKey) => {
+    setHighlightedCard(tabKey);
+    setTimeout(() => setHighlightedCard(null), 1000);
+    if (tabKey === 'approvals') {
+      const el = document.getElementById('approvals-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      setActiveTab(tabKey);
+      const el = document.getElementById('activity-table-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="dashboard-wrapper animate-fade-in" style={styles.container}>
+      <style>{extraCSS}</style>
+
+      {/* Real-time Toast Notifications Container */}
+      <div style={styles.toastContainer}>
+        {toasts.map(toast => (
+          <div 
+            key={toast.id} 
+            className={`toast-alert toast-${toast.type} animate-slide-in`}
+            style={styles.toastItem}
+          >
+            {toast.type === 'success' && <Check size={16} />}
+            {toast.type === 'error' && <X size={16} />}
+            {toast.type === 'info' && <RefreshCw size={16} className="animate-spin" />}
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Header section */}
+      <div style={styles.header}>
+        <div style={styles.headerLeft}>
+          <h1 style={styles.title}>Procurement Dashboard</h1>
+          <p style={styles.subtitle}>Welcome back, {roleLabel} - Real-time Odoo & Vendor Bridge monitoring</p>
+        </div>
+        <div style={styles.headerRight}>
+          <button 
+            className={`sync-trigger-btn ${isSyncing ? 'loading' : ''}`}
+            onClick={triggerSync}
+            disabled={isSyncing}
+            style={styles.syncBtn}
+          >
+            <RefreshCw size={15} style={isSyncing ? styles.spinning : {}} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync Odoo'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards Row */}
+      <div className="dashboard-stats-grid" style={styles.statsRow}>
+        {/* Card 1: Active RFQs */}
+        <div 
+          className={`glass-stat-card ${highlightedCard === 'rfqs' ? 'card-pulse' : ''}`}
+          style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => handleCardClick('rfqs')}
+        >
+          <div style={styles.statIconContainer}>
+            <FileText size={20} color="#38bdf8" />
+          </div>
+          <div style={styles.statNumber}>{activeRfqsCount}</div>
+          <div style={styles.statLabel}>Active RFQs</div>
+        </div>
+
+        {/* Card 2: Pending Approvals */}
+        <div 
+          className={`glass-stat-card ${highlightedCard === 'approvals' ? 'card-pulse' : ''}`}
+          style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => handleCardClick('approvals')}
+        >
+          <div style={styles.statIconContainer}>
+            <CheckSquare size={20} color="#a5b4fc" />
+          </div>
+          <div style={styles.statNumber}>{pendingApprovalsCount}</div>
+          <div style={styles.statLabel}>Pending Approvals</div>
+        </div>
+
+        {/* Card 3: PO Volume this month */}
+        <div 
+          className={`glass-stat-card ${highlightedCard === 'pos' ? 'card-pulse' : ''}`}
+          style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => handleCardClick('pos')}
+        >
+          <div style={styles.statIconContainer}>
+            <ShoppingBag size={20} color="#34d399" />
+          </div>
+          <div style={styles.statNumber}>{getPoVolumeStr()}</div>
+          <div style={styles.statLabel}>PO Volume</div>
+        </div>
+
+        {/* Card 4: Overdue Invoices */}
+        <div 
+          className={`glass-stat-card ${highlightedCard === 'invoices' ? 'card-pulse' : ''}`}
+          style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => handleCardClick('invoices')}
+        >
+          <div style={styles.statIconContainer}>
+            <AlertCircle size={20} color="#f87171" />
+          </div>
+          <div style={{ ...styles.statNumber, color: overdueInvoicesCount > 0 ? '#ef4444' : '#ffffff' }}>
+            {overdueInvoicesCount}
+          </div>
+          <div style={styles.statLabel}>Overdue Invoices</div>
+        </div>
+      </div>
+
+      {/* Two-Column Layout */}
+      <div className="dashboard-content-grid" style={styles.mainGrid}>
+        
+        {/* Left Column: Tabbed Activity Lists Widget */}
+        <div id="activity-table-section" style={styles.leftColumn}>
+          <div style={styles.tabHeaderContainer}>
+            <div style={styles.tabsWrapper}>
+              <button 
+                onClick={() => { setActiveTab('pos'); setSearchQuery(''); }}
+                style={{ ...styles.tabBtn, ...(activeTab === 'pos' ? styles.tabBtnActive : {}) }}
+              >
+                Recent POs
+              </button>
+              <button 
+                onClick={() => { setActiveTab('invoices'); setSearchQuery(''); }}
+                style={{ ...styles.tabBtn, ...(activeTab === 'invoices' ? styles.tabBtnActive : {}) }}
+              >
+                Invoices
+              </button>
+              <button 
+                onClick={() => { setActiveTab('rfqs'); setSearchQuery(''); }}
+                style={{ ...styles.tabBtn, ...(activeTab === 'rfqs' ? styles.tabBtnActive : {}) }}
+              >
+                Active RFQs
+              </button>
+            </div>
+            
+            {/* Action List Search */}
+            <div style={styles.searchWrapper}>
+              <Search size={14} style={styles.searchIcon} />
+              <input 
+                type="text" 
+                placeholder={`Search ${activeTab === 'pos' ? 'Purchase Orders' : activeTab === 'invoices' ? 'Invoices' : 'RFQs'}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={styles.searchInput}
+              />
+            </div>
+          </div>
+
+          <div className="custom-table-container" style={styles.tableCard}>
+            <table style={styles.table}>
+              {activeTab === 'pos' && (
+                <>
+                  <thead>
+                    <tr style={styles.tableHeaderRow}>
+                      <th style={styles.th}>PO #</th>
+                      <th style={styles.th}>Vendor</th>
+                      <th style={styles.th}>Date</th>
+                      <th style={styles.th}>Amount</th>
+                      <th style={styles.th}>Status</th>
+                      <th style={styles.th}>Odoo Sync</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentListData.map(po => (
+                      <tr key={po.id} style={styles.tr}>
+                        <td style={{ ...styles.td, fontWeight: 'bold', color: '#ffffff' }}>{po.poNo}</td>
+                        <td style={styles.td}>{po.vendor}</td>
+                        <td style={styles.td}>{po.date}</td>
+                        <td style={styles.td}>${po.amount.toLocaleString()}</td>
+                        <td style={styles.td}>
+                          <span className={`badge-status status-${po.status.toLowerCase()}`}>
+                            {po.status}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          {po.syncStatus === 'synced' ? (
+                            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
+                              <Check size={12} /> Synced
+                            </span>
+                          ) : po.syncStatus === 'pending' ? (
+                            <span style={{ color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
+                              <RefreshCw size={12} className="animate-spin" /> Sync Pending
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => {
+                                showToast(`Queued PO ${po.poNo} for Odoo synchronization.`);
+                                setPurchaseOrders(prev => prev.map(p => p.id === po.id ? { ...p, syncStatus: 'pending' } : p));
+                                setTimeout(() => {
+                                  setPurchaseOrders(prev => prev.map(p => p.id === po.id ? { ...p, syncStatus: 'synced', status: 'Approved' } : p));
+                                  showToast(`PO ${po.poNo} committed to Odoo successfully!`);
+                                }, 1500);
+                              }}
+                              style={styles.inlineActionBtn}
+                            >
+                              Sync Now
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {currentListData.length === 0 && (
+                      <tr>
+                        <td colSpan="6" style={styles.emptyTableText}>No purchase orders found matching search criteria.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </>
+              )}
+
+              {activeTab === 'invoices' && (
+                <>
+                  <thead>
+                    <tr style={styles.tableHeaderRow}>
+                      <th style={styles.th}>Invoice #</th>
+                      <th style={styles.th}>PO Ref</th>
+                      <th style={styles.th}>Vendor</th>
+                      <th style={styles.th}>Due Date</th>
+                      <th style={styles.th}>Amount</th>
+                      <th style={styles.th}>Status</th>
+                      <th style={styles.th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentListData.map(inv => (
+                      <tr key={inv.id} style={styles.tr}>
+                        <td style={{ ...styles.td, fontWeight: 'bold', color: '#ffffff' }}>{inv.invNo}</td>
+                        <td style={styles.td}>{inv.poRef}</td>
+                        <td style={styles.td}>{inv.vendor}</td>
+                        <td style={styles.td}>{inv.dueDate}</td>
+                        <td style={styles.td}>${inv.amount.toLocaleString()}</td>
+                        <td style={styles.td}>
+                          <span className={`badge-status status-${inv.status.toLowerCase()}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          {inv.status !== 'Paid' ? (
+                            <button 
+                              onClick={() => handlePayInvoice(inv.id, inv.invNo)}
+                              style={styles.payActionBtn}
+                            >
+                              Pay Invoice
+                            </button>
+                          ) : (
+                            <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}>
+                              <Check size={12} /> Paid
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {currentListData.length === 0 && (
+                      <tr>
+                        <td colSpan="7" style={styles.emptyTableText}>No invoices found matching search criteria.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </>
+              )}
+
+              {activeTab === 'rfqs' && (
+                <>
+                  <thead>
+                    <tr style={styles.tableHeaderRow}>
+                      <th style={styles.th}>RFQ #</th>
+                      <th style={styles.th}>Title</th>
+                      <th style={styles.th}>Budget</th>
+                      <th style={styles.th}>Deadline</th>
+                      <th style={styles.th}>Bids Recv</th>
+                      <th style={styles.th}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentListData.map(rfq => (
+                      <tr key={rfq.id} style={styles.tr}>
+                        <td style={{ ...styles.td, fontWeight: 'bold', color: '#ffffff' }}>{rfq.rfqNo}</td>
+                        <td style={styles.td}>{rfq.title}</td>
+                        <td style={styles.td}>${rfq.budget.toLocaleString()}</td>
+                        <td style={styles.td}>{rfq.deadline}</td>
+                        <td style={styles.td}>
+                          <span style={styles.badgeCount}>
+                            {rfq.vendorCount} Vendors
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span className={`badge-status status-${rfq.status.replace(' ', '-').toLowerCase()}`}>
+                            {rfq.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {currentListData.length === 0 && (
+                      <tr>
+                        <td colSpan="6" style={styles.emptyTableText}>No RFQs found matching search criteria.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </>
+              )}
+            </table>
+          </div>
+        </div>
+
+        {/* Right Column: Pending Approvals & Quick Actions */}
+        <div style={styles.rightColumn}>
+          
+          {/* Pending Approvals Widget */}
+          <div id="approvals-section" style={styles.approvalsWidgetContainer}>
+            <div style={styles.sectionHeaderRow}>
+              <div style={styles.sectionTitle}>Pending Approvals</div>
+              <span className="badge badge-primary">{approvals.length} Action Needed</span>
+            </div>
+            
+            <div style={styles.approvalsList}>
+              {approvals.map(app => {
+                const isRemoving = removingApprovalId === app.id;
+                return (
+                  <div 
+                    key={app.id} 
+                    className={`approval-card ${isRemoving ? 'slide-out' : ''}`}
+                    style={styles.approvalCard}
+                  >
+                    <div style={styles.approvalCardHeader}>
+                      <span style={styles.approvalTypeTag}>{app.type}</span>
+                      <span style={styles.approvalDate}>{app.date}</span>
+                    </div>
+                    
+                    <h4 style={styles.approvalTitle}>{app.title}</h4>
+                    
+                    <div style={styles.approvalDetails}>
+                      <div>
+                        <span style={styles.detailLabel}>Vendor</span>
+                        <span style={styles.detailValueText}>{app.vendor}</span>
+                      </div>
+                      <div>
+                        <span style={styles.detailLabel}>Amount</span>
+                        <span style={{ ...styles.detailValueText, color: '#e06b6b', fontWeight: 'bold' }}>
+                          ${app.amount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={styles.detailLabel}>Requested By</span>
+                        <span style={styles.detailValueText}>{app.requestor}</span>
+                      </div>
+                    </div>
+
+                    <div style={styles.approvalActions}>
+                      <button 
+                        onClick={() => handleResolveApproval(app.id, 'approve', app.title)}
+                        style={styles.approveButton}
+                        title="Approve Request"
+                      >
+                        <Check size={14} />
+                        <span>Approve</span>
+                      </button>
+                      <button 
+                        onClick={() => handleResolveApproval(app.id, 'reject', app.title)}
+                        style={styles.rejectButton}
+                        title="Reject Request"
+                      >
+                        <X size={14} />
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {approvals.length === 0 && (
+                <div style={styles.emptyStateContainer}>
+                  <div style={styles.emptyStateCheck}>
+                    <Check size={28} color="#10b981" />
+                  </div>
+                  <h4 style={{ color: '#ffffff', margin: '10px 0 5px 0' }}>All Caught Up!</h4>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+                    There are no pending procurement approvals requiring officer attention.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div style={styles.dividerContainer}>
+        <div style={styles.divider}></div>
+      </div>
+
+      {/* Bottom Row Layout: Spending Trends (left) and Quick Actions (right) */}
+      <div className="dashboard-bottom-grid" style={styles.bottomGrid}>
+        
+        {/* Left Column: Spending Trends last 6 months */}
+        <div style={styles.trendRowContainer}>
+          <div style={styles.sectionTitle}>Spending Trends last 6 months</div>
+          <div className="report-card-wrapper" style={{ ...styles.trendCardWrapper, position: 'relative' }}>
+            <div style={styles.trendReportCard}>
+              
+              {/* Interactive Category Selector Pills */}
+              <div style={styles.chartHeaderRow}>
+                {Object.keys(categoryConfig).map((catKey) => {
+                  const conf = categoryConfig[catKey];
+                  const isActive = selectedCategory === catKey;
+                  return (
+                    <button
+                      key={catKey}
+                      onClick={() => setSelectedCategory(catKey)}
+                      style={{
+                        ...styles.chartCategoryBtn,
+                        backgroundColor: isActive ? 'rgba(255,255,255,0.06)' : 'transparent',
+                        borderColor: isActive ? conf.color : 'rgba(255,255,255,0.05)',
+                        color: isActive ? '#ffffff' : 'var(--text-muted)'
+                      }}
+                    >
+                      <span style={{ ...styles.categoryPillDot, backgroundColor: conf.color }}></span>
+                      {conf.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Modern Area SVG Graph */}
+              <div style={styles.chartSvgContainer}>
+                <svg viewBox="0 0 440 180" style={{ width: '100%', height: '180px', display: 'block' }}>
+                  <defs>
+                    <linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={activeConf.color} stopOpacity="0.3" />
+                      <stop offset="100%" stopColor={activeConf.color} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal Grid lines */}
+                  <line x1="40" y1="30" x2="420" y2="30" stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
+                  <line x1="40" y1="70" x2="420" y2="70" stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
+                  <line x1="40" y1="110" x2="420" y2="110" stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
+                  <line x1="40" y1="150" x2="420" y2="150" stroke="rgba(255,255,255,0.08)" />
+
+                  {/* Y-Axis text labels */}
+                  <text x="32" y="34" textAnchor="end" fill="var(--text-dark)" fontSize="9" fontWeight="500">
+                    {selectedCategory === 'all' ? '$120K' : selectedCategory === 'infra' ? '$80K' : selectedCategory === 'office' ? '$25K' : selectedCategory === 'hardware' ? '$20K' : '$15K'}
+                  </text>
+                  <text x="32" y="74" textAnchor="end" fill="var(--text-dark)" fontSize="9" fontWeight="500">
+                    {selectedCategory === 'all' ? '$80K' : selectedCategory === 'infra' ? '$50K' : selectedCategory === 'office' ? '$16K' : selectedCategory === 'hardware' ? '$13K' : '$10K'}
+                  </text>
+                  <text x="32" y="114" textAnchor="end" fill="var(--text-dark)" fontSize="9" fontWeight="500">
+                    {selectedCategory === 'all' ? '$40K' : selectedCategory === 'infra' ? '$25K' : selectedCategory === 'office' ? '$8K' : selectedCategory === 'hardware' ? '$6K' : '$5K'}
+                  </text>
+                  <text x="32" y="154" textAnchor="end" fill="var(--text-dark)" fontSize="9" fontWeight="500">$0</text>
+
+                  {/* SVG Area & Line Path */}
+                  <path d={areaPath} fill="url(#chart-grad)" style={{ transition: 'all 0.3s ease' }} />
+                  <path d={linePath} fill="none" stroke={activeConf.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'all 0.3s ease' }} />
+
+                  {/* SVG Graph Interactive Nodes */}
+                  {pts.map((pt, idx) => {
+                    const isHovered = hoveredChartItem === `node-${idx}`;
+                    return (
+                      <g key={idx}>
+                        {isHovered && (
+                          <line x1={pt.x} y1="30" x2={pt.x} y2="150" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                        )}
+                        <circle 
+                          cx={pt.x} 
+                          cy={pt.y} 
+                          r={isHovered ? 6 : 3.5} 
+                          fill="#ffffff" 
+                          stroke={activeConf.color} 
+                          strokeWidth="2.5" 
+                          style={{ transition: 'r 0.15s ease', cursor: 'pointer' }}
+                        />
+                        <circle 
+                          cx={pt.x} 
+                          cy={pt.y} 
+                          r="16" 
+                          fill="transparent" 
+                          style={{ cursor: 'pointer' }}
+                          onMouseEnter={() => setHoveredChartItem(`node-${idx}`)}
+                          onMouseLeave={() => setHoveredChartItem(null)}
+                        />
+                        <text x={pt.x} y="166" textAnchor="middle" fill={isHovered ? '#ffffff' : 'var(--text-muted)'} fontSize="9" fontWeight={isHovered ? '600' : '500'}>
+                          {pt.month}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* Dynamic Interactive Chart Tooltip Overlay */}
+              <div 
+                style={{ 
+                  ...styles.chartTooltipOverlay, 
+                  opacity: hoveredChartItem && hoveredChartItem.startsWith('node-') ? 1 : 0,
+                  transform: hoveredChartItem && hoveredChartItem.startsWith('node-') ? 'translateY(0)' : 'translateY(5px)'
+                }}
+              >
+                {hoveredChartItem && hoveredChartItem.startsWith('node-') && (
+                  <>
+                    <div style={{ fontWeight: '600', color: '#ffffff', marginBottom: '4px', fontSize: '0.8rem' }}>
+                      {chartData[parseInt(hoveredChartItem.split('-')[1])].month} 2026 Spent
+                    </div>
+                    <div style={{ color: activeConf.color, fontSize: '0.9rem', fontWeight: 'bold' }}>
+                      {activeConf.label}: ${pts[parseInt(hoveredChartItem.split('-')[1])].val.toLocaleString()}
+                    </div>
+                    {selectedCategory === 'all' && (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
+                        <div>Infra: ${chartData[parseInt(hoveredChartItem.split('-')[1])].infra.toLocaleString()} | Office: ${chartData[parseInt(hoveredChartItem.split('-')[1])].office.toLocaleString()}</div>
+                        <div>Hardware: ${chartData[parseInt(hoveredChartItem.split('-')[1])].hardware.toLocaleString()} | Software: ${chartData[parseInt(hoveredChartItem.split('-')[1])].software.toLocaleString()}</div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Quick Actions */}
+        <div style={styles.quickActionsSection}>
+          <div style={styles.sectionTitle}>Quick Actions</div>
+          <div style={styles.quickActionsContainer}>
+            <div style={styles.quickActionsGrid}>
+              <button className="quick-action-btn" onClick={() => setShowRfqModal(true)}>
+                <Plus size={16} />
+                <span>New RFQ</span>
+              </button>
+              
+              <button className="quick-action-btn" onClick={() => onNavigate('vendors')}>
+                <User size={16} />
+                <span>Add Vendor</span>
+              </button>
+
+              <button className="quick-action-btn" onClick={() => onNavigate('invoices')}>
+                <DollarSign size={16} />
+                <span>Invoices</span>
+              </button>
+
+              <button className="quick-action-btn" onClick={triggerSync} disabled={isSyncing}>
+                <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+                <span>Odoo Sync</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Create RFQ Dialog Modal overlay */}
+      {showRfqModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowRfqModal(false)}>
+          <div className="glass-panel animate-fade-in" style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, color: '#ffffff' }}>Create Request for Quotation</h3>
+              <button style={styles.closeModalBtn} onClick={() => setShowRfqModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateRfq} style={styles.modalForm}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>RFQ Title / Requisition Item</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="e.g. Raw PCB Core Material 500 units"
+                  required
+                  value={newRfqData.title}
+                  onChange={e => setNewRfqData({ ...newRfqData, title: e.target.value })}
+                />
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Estimated Budget ($)</label>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    placeholder="e.g. 15000"
+                    value={newRfqData.budget}
+                    onChange={e => setNewRfqData({ ...newRfqData, budget: e.target.value })}
+                  />
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Submission Deadline</label>
+                  <input 
+                    type="date" 
+                    className="form-input" 
+                    required
+                    value={newRfqData.deadline}
+                    onChange={e => setNewRfqData({ ...newRfqData, deadline: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={styles.modalActions}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+                  Publish RFQ
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowRfqModal(false)}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Scoped extra CSS styling rules
+const extraCSS = `
+  .glass-stat-card {
+    background: rgba(16, 18, 27, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 1.5rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-stat-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 10px 25px rgba(99, 102, 241, 0.15);
+  }
+
+  .card-pulse {
+    animation: pulseHighlight 1s ease-in-out;
+  }
+
+  @keyframes pulseHighlight {
+    0% { transform: scale(1); border-color: rgba(99, 102, 241, 0.4); }
+    50% { transform: scale(1.05); border-color: rgba(99, 102, 241, 0.8); }
+    100% { transform: scale(1); border-color: rgba(255, 255, 255, 0.08); }
+  }
+
+  .custom-table-container {
+    background: rgba(16, 18, 27, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 1.5rem;
+    min-height: 320px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .custom-table-container:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 25px rgba(255, 255, 255, 0.03);
+  }
+
+  .report-card-wrapper {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .report-card-wrapper:hover .trend-report-card {
+    border-color: #62cca9;
+    box-shadow: 0 10px 25px rgba(98, 204, 169, 0.15);
+  }
+
+  .trend-report-card {
+    background: rgba(16, 18, 27, 0.3);
+    border: 1.5px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 1.8rem;
+    min-height: 250px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .collab-cursor {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .cursor-svg {
+    transform: rotate(-20deg);
+  }
+
+  .float-anim {
+    animation: floatCursor 3.2s ease-in-out infinite;
+  }
+
+  .float-anim-delayed {
+    animation: floatCursor 3.2s ease-in-out infinite 1.6s;
+  }
+
+  @keyframes floatCursor {
+    0%, 100% { transform: translateY(0px) rotate(-1.5deg); }
+    50% { transform: translateY(-6px) rotate(1.5deg); }
+  }
+
+  .badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .status-approved {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .status-pending {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+  }
+
+  .status-draft {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .status-paid {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .status-open {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .status-overdue {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    animation: dangerPulse 2s infinite;
+  }
+
+  .status-bidding-open {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+
+  .status-bids-received {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.2);
+  }
+
+  @keyframes dangerPulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+
+  /* Slide out animation for approved items */
+  .approval-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .approval-card.slide-out {
+    transform: translateX(100%);
+    opacity: 0;
+    max-height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .quick-action-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .quick-action-btn:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .quick-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Toast Slide-In Alert */
+  .toast-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #ffffff;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+    border: 1px solid;
+    pointer-events: auto;
+  }
+
+  .toast-success {
+    background: rgba(16, 185, 129, 0.9);
+    border-color: #10b981;
+  }
+
+  .toast-error {
+    background: rgba(239, 68, 68, 0.9);
+    border-color: #ef4444;
+  }
+
+  .toast-info {
+    background: rgba(99, 102, 241, 0.9);
+    border-color: #6366f1;
+  }
+
+  .animate-slide-in {
+    animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .dashboard-bottom-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 2rem;
+    align-items: stretch;
+    margin-top: 1.5rem;
+  }
+
+  @media (max-width: 1024px) {
+    .dashboard-stats-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .dashboard-content-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .dashboard-bottom-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .dashboard-stats-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+`;
+
+// Dynamic Styles Object
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem',
+  },
+  toastContainer: {
+    position: 'fixed',
+    top: '20px',
+    right: '20px',
+    zIndex: 9999,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    pointerEvents: 'none',
+  },
+  toastItem: {
+    // Defined in .toast-alert
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '1rem',
+  },
+  headerLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  syncBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'rgba(255, 255, 255, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    color: '#ffffff',
+    padding: '8px 16px',
+    borderRadius: '10px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  title: {
+    fontSize: '2.2rem',
+    fontWeight: 700,
+    color: 'var(--text-main)',
+    margin: 0,
+  },
+  subtitle: {
+    color: 'var(--text-muted)',
+    fontSize: '1rem',
+    margin: 0,
+  },
+  statsRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '1.5rem',
+  },
+  statCard: {
+    // defined in .glass-stat-card
+  },
+  statIconContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '8px',
+    background: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: '12px',
+    marginBottom: '0.5rem',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+  },
+  statNumber: {
+    fontSize: '2.4rem',
+    fontWeight: 700,
+    color: '#ffffff',
+    lineHeight: '1.1',
+    marginBottom: '0.2rem',
+  },
+  statLabel: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+  },
+  mainGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1.5fr 1fr',
+    gap: '2rem',
+    alignItems: 'start',
+  },
+  leftColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.2rem',
+  },
+  tabHeaderContainer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '10px',
+  },
+  tabsWrapper: {
+    display: 'flex',
+    background: 'rgba(0,0,0,0.25)',
+    padding: '4px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.05)',
+  },
+  tabBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    padding: '6px 14px',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  tabBtnActive: {
+    background: 'rgba(255,255,255,0.06)',
+    color: '#ffffff',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+  },
+  searchWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: '10px',
+    color: 'var(--text-dark)',
+  },
+  searchInput: {
+    background: 'rgba(0, 0, 0, 0.25)',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+    borderRadius: '8px',
+    padding: '6px 10px 6px 28px',
+    color: '#ffffff',
+    fontSize: '0.82rem',
+    outline: 'none',
+    width: '180px',
+    transition: 'all 0.2s ease',
+  },
+  sectionTitle: {
+    fontSize: '1.15rem',
+    fontWeight: 600,
+    color: 'var(--text-main)',
+    margin: 0,
+  },
+  tableCard: {
+    // defined in .custom-table-container
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  tableHeaderRow: {
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '0.8rem 0.5rem 1rem 0.5rem',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: 'var(--text-dark)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  tr: {
+    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+  },
+  td: {
+    padding: '1rem 0.5rem',
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    verticalAlign: 'middle',
+  },
+  inlineActionBtn: {
+    background: 'rgba(99, 102, 241, 0.08)',
+    border: '1px solid rgba(99, 102, 241, 0.25)',
+    color: '#a5b4fc',
+    padding: '3px 8px',
+    fontSize: '0.75rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  payActionBtn: {
+    background: 'rgba(16, 185, 129, 0.08)',
+    border: '1px solid rgba(16, 185, 129, 0.25)',
+    color: '#34d399',
+    padding: '3px 8px',
+    fontSize: '0.75rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  badgeCount: {
+    fontSize: '0.75rem',
+    color: 'var(--text-main)',
+    background: 'rgba(255,255,255,0.06)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+  },
+  emptyTableText: {
+    textAlign: 'center',
+    color: 'var(--text-dark)',
+    padding: '3rem 0',
+    fontSize: '0.85rem',
+  },
+  rightColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem',
+  },
+  approvalsWidgetContainer: {
+    background: 'rgba(16, 18, 27, 0.4)',
+    backdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '20px',
+    padding: '1.5rem',
+    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+  },
+  sectionHeaderRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.2rem',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+    paddingBottom: '10px',
+  },
+  approvalsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    maxHeight: '380px',
+    overflowY: 'auto',
+    paddingRight: '4px',
+  },
+  approvalCard: {
+    background: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    borderRadius: '12px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  approvalCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  approvalTypeTag: {
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    color: '#a5b4fc',
+    background: 'rgba(99, 102, 241, 0.08)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    textTransform: 'uppercase',
+  },
+  approvalDate: {
+    fontSize: '0.72rem',
+    color: 'var(--text-dark)',
+  },
+  approvalTitle: {
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    color: '#ffffff',
+    margin: 0,
+  },
+  approvalDetails: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '8px',
+    background: 'rgba(0,0,0,0.15)',
+    padding: '8px',
+    borderRadius: '6px',
+  },
+  detailLabel: {
+    display: 'block',
+    fontSize: '0.68rem',
+    color: 'var(--text-dark)',
+  },
+  detailValueText: {
+    fontSize: '0.75rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+    display: 'block',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+  },
+  approvalActions: {
+    display: 'flex',
+    gap: '10px',
+  },
+  approveButton: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    background: 'rgba(16, 185, 129, 0.08)',
+    border: '1px solid rgba(16, 185, 129, 0.25)',
+    color: '#34d399',
+    padding: '6px 0',
+    fontSize: '0.8rem',
+    fontWeight: 500,
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  rejectButton: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    background: 'rgba(239, 68, 68, 0.08)',
+    border: '1px solid rgba(239, 68, 68, 0.25)',
+    color: '#f87171',
+    padding: '6px 0',
+    fontSize: '0.8rem',
+    fontWeight: 500,
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  emptyStateContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem 1rem',
+  },
+  emptyStateCheck: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    background: 'rgba(16, 185, 129, 0.08)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid rgba(16, 185, 129, 0.15)',
+    marginBottom: '10px',
+  },
+  quickActionsContainer: {
+    background: 'rgba(16, 18, 27, 0.4)',
+    backdropFilter: 'blur(12px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '20px',
+    padding: '1.5rem',
+    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  quickActionsGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '10px',
+  },
+  trendRowContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+  },
+  trendCardWrapper: {
+    // defined in .report-card-wrapper
+  },
+  trendReportCard: {
+    // defined in .trend-report-card
+  },
+  reportInner: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: '1.5rem',
+    height: '100%',
+  },
+  reportLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    flex: 1.4,
+  },
+  simulatedLegendList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  legendDot: {
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+    display: 'block',
+  },
+  legendLabelText: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+  },
+  reportBars: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: '12px',
+    marginTop: '20px',
+  },
+  reportBar: {
+    width: '24px',
+    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+    borderRadius: '4px 4px 0 0',
+    border: '1px solid rgba(99, 102, 241, 0.8)',
+    transition: 'all 0.2s ease',
+    cursor: 'pointer',
+  },
+  reportRight: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    flex: 1,
+  },
+  pieContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  pieSvg: {
+    width: '80px',
+    height: '80px',
+  },
+  lineChartContainer: {
+    width: '100%',
+    marginTop: '15px',
+  },
+  lineSvg: {
+    width: '100%',
+    height: '55px',
+  },
+  dividerContainer: {
+    position: 'relative',
+    width: '100%',
+    margin: '1rem 0',
+  },
+  divider: {
+    height: '1px',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    width: '100%',
+  },
+  cursorWrap: {
+    // defined in .collab-cursor
+  },
+  cursorSvg: {
+    display: 'block',
+  },
+  spinning: {
+    animation: 'spin 1.2s linear infinite',
+  },
+
+  // Modal Dialog Styling
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(0, 0, 0, 0.65)',
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10000,
+  },
+  modalContent: {
+    background: 'rgba(16, 18, 27, 0.85)',
+    backdropFilter: 'blur(16px)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: '20px',
+    padding: '2rem',
+    width: '90%',
+    maxWidth: '500px',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.5rem',
+  },
+  closeModalBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '4px',
+  },
+  modalForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.2rem',
+  },
+  formRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1.2rem',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  label: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+  },
+  modalActions: {
+    display: 'flex',
+    gap: '12px',
+    marginTop: '0.5rem',
+  },
+  bottomGrid: {
+    // defined in .dashboard-bottom-grid
+  },
+  quickActionsSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+  },
+  chartTooltipOverlay: {
+    position: 'absolute',
+    bottom: '15px',
+    left: '18px',
+    background: 'rgba(7, 8, 13, 0.9)',
+    backdropFilter: 'blur(6px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '8px',
+    padding: '6px 12px',
+    fontSize: '0.78rem',
+    fontWeight: 500,
+    color: '#ffffff',
+    pointerEvents: 'none',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+    zIndex: 2,
+  },
+  chartHeaderRow: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '1rem',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    paddingBottom: '10px',
+  },
+  chartCategoryBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    fontSize: '0.75rem',
+    fontWeight: 500,
+    border: '1.5px solid',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    background: 'none',
+  },
+  categoryPillDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    display: 'inline-block',
+  },
+  chartSvgContainer: {
+    width: '100%',
+    position: 'relative',
+    marginTop: '0.5rem',
+  }
+};
