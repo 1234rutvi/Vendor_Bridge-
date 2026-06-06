@@ -28,7 +28,34 @@ secure workflows, and intuitive UI/UX while handling procurement relationships
 between vendors, quotations, approvals, purchase orders, and invoices.
 
 Overall Vision
+The vision for VendorBridge is to simplify and digitize procurement operations for
+organizations through a centralized ERP platform that manages vendors, RFQs,
+quotations, approvals, purchase orders, and invoice generation.
+The platform aims to reduce manual procurement inefficiencies by enabling
+structured workflows, centralized vendor communication, and real-time
+procurement tracking.
+VendorBridge focuses on delivering core ERP functionalities with clean
+architecture, role-based workflows, and scalable module design.
+
 Problem Statement
+Design and develop a Procurement & Vendor Management ERP where
+organizations can:
+● Register and manage vendors
+● Create RFQs
+● Receive vendor quotations
+● Compare quotations
+● Process procurement approvals
+● Generate purchase orders
+● Generate invoices
+● Print invoices
+● Send invoices through email
+● Track procurement activities
+
+The application must demonstrate proper ERP architecture, reusable modules,
+secure workflows, and intuitive UI/UX while handling procurement relationships
+between vendors, quotations, approvals, purchase orders, and invoices.
+
+Features
 1. Login / Signup Screen
 Purpose
 Authenticate users and provide role-based procurement access.
