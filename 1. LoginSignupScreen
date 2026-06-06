@@ -1,0 +1,10 @@
+1. Login / Signup Screen
+Purpose
+Authenticate users and provide role-based procurement access.
+Key Functionalities
+● Email & password login
+● Signup functionality
+● Forgot password
+● Session handling
+● Validation
+● Role-based authentication
