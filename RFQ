@@ -1,0 +1,1501 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Check, 
+  ChevronRight, 
+  ChevronLeft, 
+  Plus, 
+  Trash2, 
+  UploadCloud, 
+  File, 
+  X, 
+  Sparkles, 
+  Save, 
+  Loader2, 
+  FileText, 
+  CheckCircle2, 
+  AlertCircle,
+  Calendar,
+  Users,
+  Paperclip
+} from 'lucide-react';
+
+// Mock vendor list for selection
+const MOCK_VENDORS = [
+  { id: 'v1', name: 'Techcore Ltd', category: 'Hardware Components', rating: '4.8', contact: 'sales@techcore.com' },
+  { id: 'v2', name: 'Infra Supplies', category: 'Infrastructure', rating: '4.5', contact: 'bids@infrasupplies.com' },
+  { id: 'v3', name: 'Office Hub', category: 'Furniture', rating: '4.9', contact: 'orders@officehub.com' },
+  { id: 'v4', name: 'Steelcase Office', category: 'Furniture', rating: '4.7', contact: 'gov@steelcase.com' },
+  { id: 'v5', name: 'Global Hardware Corp', category: 'Hardware Components', rating: '4.6', contact: 'global@hardwarecorp.com' },
+  { id: 'v6', name: 'Walmart Wholesale Portal', category: 'Office Supplies', rating: '4.4', contact: 'portal@walmart.com' },
+  { id: 'v7', name: 'Amazon US Marketplace', category: 'Office Supplies', rating: '4.3', contact: 'b2b@amazon.com' }
+];
+
+export default function RFQCreatePage() {
+  const navigate = useNavigate();
+
+  // --- Core State Variables ---
+  const [currentStep, setCurrentStep] = useState(1);
+  const [details, setDetails] = useState({
+    title: '',
+    category: 'Furniture',
+    priority: 'Medium',
+    deadline: '',
+    description: ''
+  });
+  
+  const [items, setItems] = useState([
+    { id: 'item-1', name: 'Ergonomic Desk Chairs', qty: 25, unit: 'Nos' }
+  ]);
+  const [newItem, setNewItem] = useState({ name: '', qty: '', unit: 'Nos' });
+
+  const [selectedVendors, setSelectedVendors] = useState([]);
+  const [vendorSearch, setVendorSearch] = useState('');
+
+  const [attachments, setAttachments] = useState([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // --- System Flow States ---
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [generatedRfqNo, setGeneratedRfqNo] = useState('');
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  // --- Auto Generated RFQ Number ---
+  const [readonlyRfqNumber] = useState(`RFQ-2026-000${Math.floor(Math.random() * 900) + 100}`);
+
+  // --- Show Toast Helper ---
+  const triggerToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // --- Draft Persistence Checks ---
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('vb_rfq_draft');
+    if (savedDraft) {
+      setShowDraftBanner(true);
+    }
+  }, []);
+
+  const handleRestoreDraft = () => {
+    try {
+      const savedDraft = JSON.parse(localStorage.getItem('vb_rfq_draft'));
+      if (savedDraft) {
+        if (savedDraft.details) setDetails(savedDraft.details);
+        if (savedDraft.items) setItems(savedDraft.items);
+        if (savedDraft.selectedVendors) setSelectedVendors(savedDraft.selectedVendors);
+        triggerToast('Draft restored successfully!', 'success');
+      }
+    } catch (err) {
+      triggerToast('Could not restore draft.', 'error');
+    }
+    setShowDraftBanner(false);
+  };
+
+  const handleSaveDraft = () => {
+    const draftData = { details, items, selectedVendors };
+    localStorage.setItem('vb_rfq_draft', JSON.stringify(draftData));
+    triggerToast('RFQ Draft saved locally!', 'success');
+  };
+
+  const handleClearDraftBanner = () => {
+    setShowDraftBanner(false);
+    localStorage.removeItem('vb_rfq_draft');
+  };
+
+  // --- Category-driven AI Vendor Suggestion ---
+  const getSuggestedVendors = () => {
+    return MOCK_VENDORS.filter(v => v.category === details.category);
+  };
+  const suggestedVendorsList = getSuggestedVendors();
+
+  // --- Step Form Navigations & Validations ---
+  const validateStep1 = () => {
+    const stepErrors = {};
+    if (!details.title.trim()) stepErrors.title = 'RFQ Title is required.';
+    if (!details.deadline) stepErrors.deadline = 'Deadline Date is required.';
+    setErrors(stepErrors);
+    return Object.keys(stepErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (currentStep === 1) {
+      if (!validateStep1()) {
+        triggerToast('Please correct form validation errors.', 'error');
+        return;
+      }
+    }
+    if (currentStep === 2 && items.length === 0) {
+      triggerToast('Please add at least one line item.', 'error');
+      return;
+    }
+    if (currentStep === 3 && selectedVendors.length === 0) {
+      triggerToast('Please select at least one vendor for assignment.', 'error');
+      return;
+    }
+    setCurrentStep(prev => Math.min(prev + 1, 5));
+  };
+
+  const handlePrevious = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+  };
+
+  // --- Line Items CRUD ---
+  const handleAddItem = (e) => {
+    e.preventDefault();
+    if (!newItem.name.trim() || !newItem.qty) {
+      triggerToast('Provide Item Name and Quantity.', 'error');
+      return;
+    }
+    const created = {
+      id: `item-${Date.now()}`,
+      name: newItem.name,
+      qty: Number(newItem.qty),
+      unit: newItem.unit
+    };
+    setItems(prev => [...prev, created]);
+    setNewItem({ name: '', qty: '', unit: 'Nos' });
+    triggerToast('Line item added.');
+  };
+
+  const handleDeleteItem = (id) => {
+    setItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  // --- Vendor Selector Checklist & Chips ---
+  const handleToggleVendor = (vendorId) => {
+    setSelectedVendors(prev => 
+      prev.includes(vendorId)
+        ? prev.filter(id => id !== vendorId)
+        : [...prev, vendorId]
+    );
+  };
+
+  const filteredVendors = MOCK_VENDORS.filter(v => 
+    v.name.toLowerCase().includes(vendorSearch.toLowerCase()) ||
+    v.category.toLowerCase().includes(vendorSearch.toLowerCase())
+  );
+
+  // --- File Drag & Drop Attachment Handlers ---
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    if (e.dataTransfer.files) {
+      processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files) {
+      processFiles(e.target.files);
+    }
+  };
+
+  const processFiles = (fileList) => {
+    const validExtensions = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg'];
+    const newFiles = [];
+    
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const ext = file.name.split('.').pop().toLowerCase();
+      
+      if (validExtensions.includes(ext)) {
+        newFiles.push({
+          id: `file-${Date.now()}-${i}`,
+          name: file.name,
+          size: `${(file.size / 1024).toFixed(1)} KB`,
+          type: ext.toUpperCase()
+        });
+      } else {
+        triggerToast(`File format .${ext} is not supported.`, 'error');
+      }
+    }
+    
+    if (newFiles.length > 0) {
+      setAttachments(prev => [...prev, ...newFiles]);
+      triggerToast(`${newFiles.length} file(s) attached successfully!`);
+    }
+  };
+
+  const handleRemoveFile = (fileId) => {
+    setAttachments(prev => prev.filter(f => f.id !== fileId));
+    triggerToast('Attachment removed.');
+  };
+
+  // --- Final Submit Action ---
+  const handleSubmitRFQ = () => {
+    setIsSubmitting(true);
+    
+    // Simulate submission to Odoo / Vendors
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setGeneratedRfqNo(readonlyRfqNumber);
+      setShowSuccessModal(true);
+      localStorage.removeItem('vb_rfq_draft'); // Clean up draft on success
+    }, 1800);
+  };
+
+  const handleCloseModalAndReset = () => {
+    setShowSuccessModal(false);
+    navigate('/dashboard');
+  };
+
+  return (
+    <div className="rfq-create-wrapper animate-fade-in" style={styles.container}>
+      <style>{customCSS}</style>
+
+      {/* Real-time Toast Notifications */}
+      {toast && (
+        <div style={styles.toastBox} className={`toast-${toast.type} animate-slide-in`}>
+          {toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Recover Draft Banner */}
+      {showDraftBanner && (
+        <div className="glass-panel restore-draft-banner animate-slide-in" style={styles.draftBanner}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Sparkles size={18} color="var(--warning)" className="animate-pulse" />
+            <span style={{ fontSize: '0.9rem', color: '#ffffff' }}>
+              We found an unsaved RFQ draft in your local storage session.
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleRestoreDraft} className="banner-btn-restore">
+              Restore Draft
+            </button>
+            <button onClick={handleClearDraftBanner} className="banner-btn-discard">
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Header section */}
+      <header style={styles.header}>
+        <div>
+          <h2 style={styles.title}>Create Request for Quotation</h2>
+          <p style={styles.subtitle}>Draft and distribute procurement specifications to pre-vetted vendors.</p>
+        </div>
+        <button className="btn btn-secondary" onClick={handleSaveDraft} style={{ gap: '6px' }}>
+          <Save size={15} />
+          <span>Save Draft</span>
+        </button>
+      </header>
+
+      {/* Stepper Progress Indicator */}
+      <div className="glass-panel" style={styles.stepperContainer}>
+        {[
+          { label: 'Details', step: 1 },
+          { label: 'Line Items', step: 2 },
+          { label: 'Vendors', step: 3 },
+          { label: 'Attachments', step: 4 },
+          { label: 'Review & Submit', step: 5 }
+        ].map((item, idx) => {
+          const isActive = currentStep === item.step;
+          const isCompleted = currentStep > item.step;
+          return (
+            <React.Fragment key={item.step}>
+              <div style={styles.stepIndicatorWrapper}>
+                <div 
+                  className={`step-circle ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+                  style={{
+                    ...styles.stepCircle,
+                    borderColor: isActive ? 'var(--primary)' : isCompleted ? 'var(--success)' : 'rgba(255,255,255,0.08)',
+                    background: isActive ? 'var(--primary-glow)' : isCompleted ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.02)',
+                    color: isCompleted ? 'var(--success)' : isActive ? '#ffffff' : 'var(--text-dark)'
+                  }}
+                >
+                  {isCompleted ? <Check size={16} /> : item.step}
+                </div>
+                <span 
+                  style={{ 
+                    ...styles.stepLabelText, 
+                    color: isActive ? '#ffffff' : isCompleted ? 'var(--text-muted)' : 'var(--text-dark)',
+                    fontWeight: isActive ? '600' : '500'
+                  }}
+                >
+                  {item.label}
+                </span>
+              </div>
+              {idx < 4 && (
+                <div 
+                  style={{ 
+                    ...styles.stepConnectorLine, 
+                    background: isCompleted ? 'var(--success)' : 'rgba(255,255,255,0.08)' 
+                  }} 
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Two-Column Responsive Layout */}
+      <div className="rfq-layout-grid" style={styles.layoutGrid}>
+        
+        {/* Left Form Panel */}
+        <div className="glass-panel form-card-container" style={styles.formCard}>
+          {/* Step 1: RFQ Details Form */}
+          {currentStep === 1 && (
+            <div className="animate-fade-in" style={styles.stepFormWrapper}>
+              <h3 style={styles.formSectionTitle}>Step 1: RFQ Specifications</h3>
+              
+              <div style={styles.formGroup}>
+                <label style={styles.label}>RFQ Number (Auto Generated)</label>
+                <input 
+                  type="text" 
+                  value={readonlyRfqNumber} 
+                  readOnly 
+                  style={styles.readonlyInput} 
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>RFQ Title <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input 
+                  type="text" 
+                  className={`form-input ${errors.title ? 'input-error' : ''}`}
+                  placeholder="e.g. Ergonomic Office furniture for HQ relocation"
+                  value={details.title}
+                  onChange={e => {
+                    setDetails({ ...details, title: e.target.value });
+                    if (errors.title) setErrors({ ...errors, title: null });
+                  }}
+                />
+                {errors.title && <span style={styles.errorMsgText}>{errors.title}</span>}
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Procurement Category</label>
+                  <select 
+                    className="form-input" 
+                    style={{ background: 'rgba(0,0,0,0.3)', color: '#ffffff' }}
+                    value={details.category}
+                    onChange={e => setDetails({ ...details, category: e.target.value })}
+                  >
+                    <option value="Furniture">Furniture</option>
+                    <option value="Hardware Components">Hardware Components</option>
+                    <option value="Office Supplies">Office Supplies</option>
+                    <option value="Infrastructure">Infrastructure</option>
+                  </select>
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Priority Level</label>
+                  <select 
+                    className="form-input" 
+                    style={{ background: 'rgba(0,0,0,0.3)', color: '#ffffff' }}
+                    value={details.priority}
+                    onChange={e => setDetails({ ...details, priority: e.target.value })}
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Quotation Deadline <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input 
+                  type="date" 
+                  className={`form-input ${errors.deadline ? 'input-error' : ''}`}
+                  value={details.deadline}
+                  onChange={e => {
+                    setDetails({ ...details, deadline: e.target.value });
+                    if (errors.deadline) setErrors({ ...errors, deadline: null });
+                  }}
+                />
+                {errors.deadline && <span style={styles.errorMsgText}>{errors.deadline}</span>}
+              </div>
+
+              <div style={styles.formGroup}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={styles.label}>Detailed Description</label>
+                  <span style={styles.charCounterText}>
+                    {details.description.length} / 500 characters
+                  </span>
+                </div>
+                <textarea 
+                  className="form-input" 
+                  style={{ minHeight: '120px', resize: 'vertical' }}
+                  placeholder="Provide specific technical parameters or delivery schedule rules..."
+                  maxLength={500}
+                  value={details.description}
+                  onChange={e => setDetails({ ...details, description: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Line Items */}
+          {currentStep === 2 && (
+            <div className="animate-fade-in" style={styles.stepFormWrapper}>
+              <h3 style={styles.formSectionTitle}>Step 2: Line Items Specs</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                Identify the product quantities and units you wish vendors to quote for.
+              </p>
+
+              {/* Line Items Table */}
+              <div style={styles.tableResponsiveContainer}>
+                <table style={styles.itemsTable}>
+                  <thead>
+                    <tr style={styles.tableHeaderRow}>
+                      <th style={styles.th}>Product Item Name</th>
+                      <th style={styles.th}>Quantity</th>
+                      <th style={styles.th}>Unit</th>
+                      <th style={{ ...styles.th, textAlign: 'center' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(item => (
+                      <tr key={item.id} style={styles.tr}>
+                        <td style={{ ...styles.td, fontWeight: '500', color: '#ffffff' }}>{item.name}</td>
+                        <td style={styles.td}>{item.qty}</td>
+                        <td style={styles.td}>
+                          <span style={styles.unitBadge}>{item.unit}</span>
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <button 
+                            onClick={() => handleDeleteItem(item.id)}
+                            style={styles.deleteLineItemBtn}
+                            title="Remove Line Item"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {items.length === 0 && (
+                      <tr>
+                        <td colSpan="4" style={styles.emptyTableText}>
+                          No line items specified. Add items below to continue.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Add Line Item Form Inline */}
+              <form onSubmit={handleAddItem} className="glass-panel" style={styles.addItemFormCard}>
+                <h4 style={{ fontSize: '0.9rem', color: '#ffffff', marginBottom: '10px' }}>+ Add Custom Product Line</h4>
+                <div style={styles.addItemGrid}>
+                  <div style={{ flex: 2 }}>
+                    <label style={styles.label}>Product Name</label>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="e.g. Ergonomic Office Desk"
+                      value={newItem.name}
+                      onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>Qty</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="25"
+                      min="1"
+                      value={newItem.qty}
+                      onChange={e => setNewItem({ ...newItem, qty: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={styles.label}>Unit</label>
+                    <select 
+                      className="form-input" 
+                      style={{ background: 'rgba(0,0,0,0.3)', color: '#ffffff' }}
+                      value={newItem.unit}
+                      onChange={e => setNewItem({ ...newItem, unit: e.target.value })}
+                    >
+                      <option value="Nos">Nos</option>
+                      <option value="Pcs">Pcs</option>
+                      <option value="Kgs">Kgs</option>
+                      <option value="Boxes">Boxes</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button type="submit" className="btn btn-primary" style={{ height: '40px', padding: '0 15px' }}>
+                      <Plus size={16} /> Add
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Step 3: Vendor Selector */}
+          {currentStep === 3 && (
+            <div className="animate-fade-in" style={styles.stepFormWrapper}>
+              <h3 style={styles.formSectionTitle}>Step 3: Assign Vendors</h3>
+
+              {/* AI Recommendations Highlight Box */}
+              {suggestedVendorsList.length > 0 && (
+                <div className="ai-recommendations-panel" style={styles.aiRecommendedPanel}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Sparkles size={16} color="var(--warning)" className="animate-pulse" />
+                    <h4 style={{ fontSize: '0.85rem', color: '#ffffff', margin: 0 }}>
+                      AI Recommended Vendors (Category Match: {details.category})
+                    </h4>
+                  </div>
+                  <div style={styles.aiVendorsGrid}>
+                    {suggestedVendorsList.map(v => {
+                      const isChecked = selectedVendors.includes(v.id);
+                      return (
+                        <div 
+                          key={v.id} 
+                          className={`ai-vendor-badge ${isChecked ? 'selected' : ''}`}
+                          style={{
+                            ...styles.aiVendorCard,
+                            borderColor: isChecked ? 'var(--warning)' : 'rgba(255,255,255,0.06)',
+                            background: isChecked ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255,255,255,0.02)'
+                          }}
+                          onClick={() => handleToggleVendor(v.id)}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#ffffff' }}>{v.name}</span>
+                            <Sparkles size={12} color="var(--warning)" />
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            Rating: ⭐ {v.rating} | {v.category}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Search filter input */}
+              <div style={styles.searchWrapper}>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  style={{ paddingLeft: '14px', marginBottom: '12px' }}
+                  placeholder="Search vendor database by name or category..."
+                  value={vendorSearch}
+                  onChange={e => setVendorSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Selected Vendor Chips list */}
+              {selectedVendors.length > 0 && (
+                <div style={styles.selectedChipsContainer}>
+                  {selectedVendors.map(vid => {
+                    const vendorObj = MOCK_VENDORS.find(v => v.id === vid);
+                    if (!vendorObj) return null;
+                    return (
+                      <span key={vid} style={styles.vendorChip}>
+                        <span>{vendorObj.name}</span>
+                        <X 
+                          size={12} 
+                          style={{ cursor: 'pointer' }} 
+                          onClick={() => handleToggleVendor(vid)}
+                        />
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Checkbox selector list */}
+              <div style={styles.vendorsSelectionList}>
+                {filteredVendors.map(v => {
+                  const isChecked = selectedVendors.includes(v.id);
+                  return (
+                    <div 
+                      key={v.id} 
+                      onClick={() => handleToggleVendor(v.id)}
+                      style={{
+                        ...styles.vendorRowCheckbox,
+                        background: isChecked ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                        borderColor: isChecked ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.04)'
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={() => {}} // handled by row click
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <div style={{ flex: 1, marginLeft: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#ffffff' }}>{v.name}</span>
+                          <span style={styles.categoryPillTag}>{v.category}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)' }}>{v.contact}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⭐ {v.rating}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredVendors.length === 0 && (
+                  <div style={styles.emptyTableText}>No vendors match search criteria.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Attachments File Upload */}
+          {currentStep === 4 && (
+            <div className="animate-fade-in" style={styles.stepFormWrapper}>
+              <h3 style={styles.formSectionTitle}>Step 4: Upload Technical Specifications</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+                Upload layouts, PDF specs sheets, or engineering requirements. Files are bound to Odoo bridge attachments.
+              </p>
+
+              {/* Drag & Drop Boundary Box */}
+              <div 
+                className={`drag-upload-box ${isDragOver ? 'dragover' : ''}`}
+                style={{
+                  ...styles.dragBoxContainer,
+                  borderColor: isDragOver ? 'var(--primary)' : 'rgba(255,255,255,0.15)',
+                  backgroundColor: isDragOver ? 'var(--primary-glow)' : 'rgba(0,0,0,0.15)'
+                }}
+                onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleFileDrop}
+              >
+                <input 
+                  type="file" 
+                  id="rfq-file-input" 
+                  multiple 
+                  style={{ display: 'none' }}
+                  onChange={handleFileSelect}
+                />
+                <label htmlFor="rfq-file-input" style={styles.dragBoxLabel}>
+                  <UploadCloud size={40} color="var(--text-muted)" style={{ marginBottom: '10px' }} />
+                  <span style={{ fontSize: '0.95rem', fontWeight: '600', color: '#ffffff' }}>
+                    Drag & drop files here, or click to browse
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginTop: '4px' }}>
+                    Supported: PDF, DOCX, XLSX, PNG, JPG (Max 5MB)
+                  </span>
+                </label>
+              </div>
+
+              {/* Attachment Previews List */}
+              {attachments.length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', color: '#ffffff', marginBottom: '10px' }}>Uploaded Documents ({attachments.length})</h4>
+                  <div style={styles.attachmentFilesList}>
+                    {attachments.map(file => (
+                      <div key={file.id} style={styles.fileRowItem}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <File size={16} color="var(--primary)" />
+                          <div>
+                            <div style={{ fontSize: '0.85rem', color: '#ffffff', fontWeight: '500' }}>{file.name}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-dark)' }}>{file.size} | {file.type}</div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveFile(file.id)}
+                          style={styles.removeFileBtn}
+                          title="Remove File"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 5: Review & Submit */}
+          {currentStep === 5 && (
+            <div className="animate-fade-in" style={styles.stepFormWrapper}>
+              <h3 style={styles.formSectionTitle}>Step 5: Review Requisition</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                Verify all procurement details, quantities, and vendor distribution mappings before dispatching.
+              </p>
+
+              <div className="glass-panel" style={styles.reviewSummaryBox}>
+                <div style={styles.reviewGrid}>
+                  <div>
+                    <span style={styles.reviewLabel}>RFQ Number</span>
+                    <span style={styles.reviewValue}>{readonlyRfqNumber}</span>
+                  </div>
+                  <div>
+                    <span style={styles.reviewLabel}>Deadline</span>
+                    <span style={styles.reviewValue}>{details.deadline || 'Not Specified'}</span>
+                  </div>
+                  <div>
+                    <span style={styles.reviewLabel}>RFQ Title</span>
+                    <span style={styles.reviewValue}>{details.title || 'Untitled Requisition'}</span>
+                  </div>
+                  <div>
+                    <span style={styles.reviewLabel}>Category</span>
+                    <span style={styles.reviewValue}>{details.category}</span>
+                  </div>
+                  <div>
+                    <span style={styles.reviewLabel}>Priority Level</span>
+                    <span style={{ 
+                      ...styles.reviewValue, 
+                      color: details.priority === 'Urgent' ? 'var(--danger)' : details.priority === 'High' ? 'var(--warning)' : '#ffffff' 
+                    }}>
+                      {details.priority}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={styles.reviewLabel}>Attachments Count</span>
+                    <span style={styles.reviewValue}>{attachments.length} files</span>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1.2rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                  <span style={styles.reviewLabel}>Specification Description</span>
+                  <p style={styles.reviewDescText}>{details.description || 'No detailed description provided.'}</p>
+                </div>
+
+                {/* Items Summary list */}
+                <div style={{ marginTop: '1.2rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                  <span style={styles.reviewLabel}>Procurement Line Items ({items.length})</span>
+                  <div style={styles.reviewItemsScroll}>
+                    {items.map((item, idx) => (
+                      <div key={item.id} style={styles.reviewItemRow}>
+                        <span style={{ color: '#ffffff', fontSize: '0.82rem' }}>{idx + 1}. {item.name}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>Qty: {item.qty} {item.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selected Vendors summary */}
+                <div style={{ marginTop: '1.2rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+                  <span style={styles.reviewLabel}>Target Vendors Recipient ({selectedVendors.length})</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                    {selectedVendors.map(vid => {
+                      const vObj = MOCK_VENDORS.find(v => v.id === vid);
+                      return (
+                        <span key={vid} style={styles.reviewVendorTag}>
+                          {vObj ? vObj.name : vid}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Stepper Buttons footer actions */}
+          <div style={styles.stepperActionsRow}>
+            {currentStep > 1 ? (
+              <button onClick={handlePrevious} className="btn btn-secondary" style={{ gap: '6px' }} disabled={isSubmitting}>
+                <ChevronLeft size={16} /> Previous
+              </button>
+            ) : (
+              <div /> // spacer
+            )}
+
+            {currentStep < 5 ? (
+              <button onClick={handleNext} className="btn btn-primary" style={{ gap: '6px' }}>
+                Next <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button 
+                onClick={handleSubmitRFQ} 
+                className="btn btn-primary" 
+                style={{ gap: '8px', background: 'linear-gradient(135deg, var(--success), #059669)' }}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>{isSubmitting ? 'Sending...' : 'Send To Vendors'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right Sidebar Summary Card */}
+        <div style={styles.sidebarColumn}>
+          <div className="glass-panel summary-sidebar-card" style={styles.summaryCard}>
+            <h3 style={styles.sidebarTitle}>RFQ Summary</h3>
+            
+            <div style={styles.sidebarDetailsGrid}>
+              <div style={styles.sidebarDetailItem}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={16} color="var(--primary)" />
+                  <span style={styles.sidebarLabel}>Line Items</span>
+                </div>
+                <span style={styles.sidebarValueText}>{items.length} Product(s)</span>
+              </div>
+
+              <div style={styles.sidebarDetailItem}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={16} color="var(--secondary)" />
+                  <span style={styles.sidebarLabel}>Assigned Vendors</span>
+                </div>
+                <span style={styles.sidebarValueText}>{selectedVendors.length} Recipient(s)</span>
+              </div>
+
+              <div style={styles.sidebarDetailItem}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Paperclip size={16} color="#34d399" />
+                  <span style={styles.sidebarLabel}>Documents attached</span>
+                </div>
+                <span style={styles.sidebarValueText}>{attachments.length} Specification(s)</span>
+              </div>
+
+              <div style={styles.sidebarDetailItem}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={16} color="#fb923c" />
+                  <span style={styles.sidebarLabel}>Submission Deadline</span>
+                </div>
+                <span style={styles.sidebarValueText}>
+                  {details.deadline ? new Date(details.deadline).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Pending details'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Progress Completeness</span>
+                <span style={{ fontSize: '0.85rem', color: '#ffffff', fontWeight: 'bold' }}>{currentStep * 20}%</span>
+              </div>
+              <div style={styles.progressBarWrapper}>
+                <div 
+                  style={{ 
+                    ...styles.progressBarFill, 
+                    width: `${currentStep * 20}%`,
+                    background: currentStep === 5 ? 'var(--success)' : 'var(--primary)'
+                  }} 
+                />
+              </div>
+            </div>
+
+            {/* Helper Hint */}
+            <div style={styles.sidebarHintBox}>
+              <Sparkles size={14} color="var(--primary)" />
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
+                Category changes automatically adjust AI recommendation weights on Step 3.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div style={styles.modalOverlay}>
+          <div className="glass-panel success-modal-content animate-fade-in" style={styles.modalContent}>
+            <div style={styles.modalIconContainer}>
+              <CheckCircle2 size={48} color="var(--success)" />
+            </div>
+            
+            <h3 style={styles.modalTitle}>RFQ Created Successfully</h3>
+            <p style={styles.modalSubtitle}>
+              Your specifications have been mapped and dispatched to Odoo bridge channels & pre-vetted vendors.
+            </p>
+
+            <div style={styles.modalNumberBox}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                RFQ Reference Code
+              </span>
+              <span style={styles.modalNumberText}>{generatedRfqNo}</span>
+            </div>
+
+            <button 
+              onClick={handleCloseModalAndReset} 
+              className="btn btn-primary" 
+              style={{ width: '100%', justifyContent: 'center', marginTop: '1.5rem' }}
+            >
+              Done & Return Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Scoped custom CSS rules for the RFQ creation stepper component
+const customCSS = `
+  .step-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: bold;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .step-circle.active {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+    transform: scale(1.05);
+  }
+
+  .step-circle.completed {
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  }
+
+  .rfq-layout-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .drag-upload-box {
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .drag-upload-box.dragover, .drag-upload-box:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 20px rgba(99,102,241,0.15);
+  }
+
+  .ai-vendor-badge {
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .ai-vendor-badge:hover {
+    border-color: rgba(245, 158, 11, 0.4);
+    transform: translateY(-2px);
+  }
+
+  .ai-vendor-badge.selected {
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.12);
+  }
+
+  .vendor-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary-glow);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .restore-draft-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: rgba(16, 18, 27, 0.85);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.1);
+    border-radius: 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .banner-btn-restore {
+    background: var(--warning-glow);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: var(--warning);
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .banner-btn-restore:hover {
+    background: var(--warning);
+    color: #07080d;
+  }
+
+  .banner-btn-discard {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .banner-btn-discard:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Input error helper border */
+  .input-error {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15) !important;
+  }
+
+  @media (max-width: 1024px) {
+    .rfq-layout-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+`;
+
+// Inline styled guidelines for fast render
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem',
+  },
+  toastBox: {
+    position: 'fixed',
+    top: '20px',
+    right: '20px',
+    zIndex: 99999,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+    color: '#ffffff',
+    boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+  },
+  draftBanner: {
+    marginBottom: '-1rem',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '12px',
+  },
+  title: {
+    fontSize: '2rem',
+    fontWeight: 700,
+    color: 'var(--text-main)',
+    marginBottom: '0.4rem',
+  },
+  subtitle: {
+    color: 'var(--text-muted)',
+    fontSize: '1rem',
+  },
+  stepperContainer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '1.2rem 2.2rem',
+    flexWrap: 'wrap',
+    gap: '12px',
+  },
+  stepIndicatorWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  stepCircle: {
+    // Defined in .step-circle
+  },
+  stepLabelText: {
+    fontSize: '0.88rem',
+    whiteSpace: 'nowrap',
+  },
+  stepConnectorLine: {
+    flex: 1,
+    height: '2px',
+    minWidth: '20px',
+    borderRadius: '2px',
+  },
+  layoutGrid: {
+    // Defined in .rfq-layout-grid
+  },
+  formCard: {
+    padding: '2rem',
+  },
+  stepFormWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.4rem',
+  },
+  formSectionTitle: {
+    fontSize: '1.2rem',
+    fontWeight: 600,
+    color: '#ffffff',
+    margin: 0,
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    paddingBottom: '10px',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  formRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1.5rem',
+  },
+  label: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+  },
+  readonlyInput: {
+    background: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    borderRadius: '8px',
+    color: 'var(--text-dark)',
+    padding: '10px 14px',
+    fontSize: '0.9rem',
+    outline: 'none',
+    width: '100%',
+    cursor: 'not-allowed',
+    fontWeight: 'bold',
+  },
+  charCounterText: {
+    fontSize: '0.75rem',
+    color: 'var(--text-dark)',
+  },
+  errorMsgText: {
+    fontSize: '0.75rem',
+    color: 'var(--danger)',
+    marginTop: '2px',
+  },
+  tableResponsiveContainer: {
+    width: '100%',
+    overflowX: 'auto',
+    background: 'rgba(0, 0, 0, 0.15)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+  },
+  itemsTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  tableHeaderRow: {
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    background: 'rgba(255, 255, 255, 0.02)',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '10px 14px',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    color: 'var(--text-dark)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  tr: {
+    borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+    transition: 'background 0.2s ease',
+  },
+  td: {
+    padding: '12px 14px',
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+  },
+  unitBadge: {
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    color: 'var(--text-main)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '0.75rem',
+  },
+  deleteLineItemBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--danger)',
+    cursor: 'pointer',
+    padding: '4px',
+    transition: 'transform 0.15s ease',
+  },
+  emptyTableText: {
+    textAlign: 'center',
+    color: 'var(--text-dark)',
+    padding: '2.5rem 0',
+    fontSize: '0.85rem',
+  },
+  addItemFormCard: {
+    padding: '1.2rem',
+    marginTop: '0.5rem',
+  },
+  addItemGrid: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  aiRecommendedPanel: {
+    background: 'rgba(245, 158, 11, 0.04)',
+    border: '1px dashed rgba(245, 158, 11, 0.25)',
+    borderRadius: '16px',
+    padding: '1.2rem',
+    marginBottom: '1rem',
+  },
+  aiVendorsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '10px',
+  },
+  aiVendorCard: {
+    // Defined in .ai-vendor-badge
+  },
+  selectedChipsContainer: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    marginBottom: '12px',
+  },
+  categoryPillTag: {
+    fontSize: '0.68rem',
+    fontWeight: 600,
+    color: 'var(--primary)',
+    background: 'var(--primary-glow)',
+    border: '1px solid rgba(99, 102, 241, 0.2)',
+    padding: '1px 6px',
+    borderRadius: '4px',
+    textTransform: 'uppercase',
+  },
+  vendorsSelectionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '300px',
+    overflowY: 'auto',
+    paddingRight: '4px',
+  },
+  vendorRowCheckbox: {
+    border: '1px solid',
+    borderRadius: '10px',
+    padding: '10px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  dragBoxContainer: {
+    // Defined in .drag-upload-box
+  },
+  dragBoxLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  attachmentFilesList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  fileRowItem: {
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.05)',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  removeFileBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-dark)',
+    cursor: 'pointer',
+    padding: '4px',
+  },
+  reviewSummaryBox: {
+    padding: '1.5rem',
+  },
+  reviewGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: '1rem',
+  },
+  reviewLabel: {
+    display: 'block',
+    fontSize: '0.72rem',
+    color: 'var(--text-dark)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  reviewValue: {
+    fontSize: '0.88rem',
+    fontWeight: '600',
+    color: '#ffffff',
+    display: 'block',
+    marginTop: '2px',
+  },
+  reviewDescText: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    marginTop: '4px',
+    lineHeight: '1.4',
+  },
+  reviewItemsScroll: {
+    maxHeight: '150px',
+    overflowY: 'auto',
+    background: 'rgba(0,0,0,0.15)',
+    padding: '8px',
+    borderRadius: '6px',
+    marginTop: '6px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  reviewItemRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    borderBottom: '1px solid rgba(255,255,255,0.03)',
+    paddingBottom: '4px',
+  },
+  reviewVendorTag: {
+    fontSize: '0.78rem',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#ffffff',
+    padding: '3px 8px',
+    borderRadius: '4px',
+  },
+  stepperActionsRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '2rem',
+    borderTop: '1px solid rgba(255,255,255,0.06)',
+    paddingTop: '1.2rem',
+  },
+  sidebarColumn: {
+    // Defined in layout
+  },
+  summaryCard: {
+    padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+  },
+  sidebarTitle: {
+    fontSize: '1.1rem',
+    fontWeight: 600,
+    color: '#ffffff',
+    margin: 0,
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    paddingBottom: '10px',
+  },
+  sidebarDetailsGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  sidebarDetailItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sidebarLabel: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    fontWeight: 500,
+  },
+  sidebarValueText: {
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  progressBarWrapper: {
+    width: '100%',
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    marginTop: '6px',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.3s ease',
+  },
+  sidebarHintBox: {
+    background: 'rgba(99, 102, 241, 0.04)',
+    border: '1px solid rgba(99, 102, 241, 0.1)',
+    borderRadius: '8px',
+    padding: '10px',
+    display: 'flex',
+    gap: '8px',
+  },
+
+  // Modal overlays
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(7,8,13,0.7)',
+    backdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: '440px',
+    padding: '2rem',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
+  },
+  modalIconContainer: {
+    marginBottom: '1rem',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: '1.35rem',
+    fontWeight: 700,
+    color: '#ffffff',
+    margin: '0 0 8px 0',
+  },
+  modalSubtitle: {
+    fontSize: '0.88rem',
+    color: 'var(--text-muted)',
+    lineHeight: '1.5',
+    margin: '0 0 1.2rem 0',
+  },
+  modalNumberBox: {
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px dashed rgba(255,255,255,0.12)',
+    borderRadius: '10px',
+    padding: '12px',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  modalNumberText: {
+    fontSize: '1.2rem',
+    fontWeight: 700,
+    color: 'var(--success)',
+  }
+};
