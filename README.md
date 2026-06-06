@@ -1,5 +1,5 @@
 VendorBridge
-Procurement & Vendor Management ERP
+Procurement & Vendor Management ERP Hackathon June 6th, 2026
 
 The vision for VendorBridge is to simplify and digitize procurement operations for
 organizations through a centralized ERP platform that manages vendors, RFQs,
