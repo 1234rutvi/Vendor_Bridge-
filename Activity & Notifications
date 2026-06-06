@@ -1,0 +1,590 @@
+import React, { useState } from 'react';
+import { 
+  Check, 
+  Clock, 
+  FileText, 
+  Users, 
+  Search, 
+  X, 
+  AlertTriangle, 
+  CreditCard,
+  Building,
+  RefreshCw,
+  Info
+} from 'lucide-react';
+
+export default function ActivityPage() {
+  // --- Audit Logs Database ---
+  const [logs, setLogs] = useState([
+    {
+      id: 'log-1',
+      type: 'Approvals',
+      title: 'Quotation selected',
+      detail: 'Infra supplies pvt ltd selected for office furniture Q2',
+      timestamp: '23 may 2025, 9:15 PM',
+      severity: 'success',
+      actor: 'System Admin / Priya Shah',
+      detailsText: 'After side-by-side bid comparison, Infra supplies pvt ltd was approved as the lowest priced vendor meeting all delivery constraints.'
+    },
+    {
+      id: 'log-2',
+      type: 'Approvals',
+      title: 'Approval pending',
+      detail: 'PO-2024 awaiting L2 approval by priya shah',
+      timestamp: '22 may 2025, 09:15 AM',
+      severity: 'warning',
+      actor: 'Elena Rostova',
+      detailsText: 'Requisition budget exceeds officer limits. Forwarded for higher level management validation and sign-off.'
+    },
+    {
+      id: 'log-3',
+      type: 'RFQ',
+      title: 'RFQ published',
+      detail: 'office furniture Q2 sent to 3 vendors',
+      timestamp: '19 may 2025',
+      severity: 'info',
+      actor: 'System Officer',
+      detailsText: 'Request for Quotation successfully dispatched to Office Hub, Infra Supplies, and Office Need Co.'
+    },
+    {
+      id: 'log-4',
+      type: 'Vendors',
+      title: 'Vendor added',
+      detail: 'FastLog transport registered and pending verifications',
+      timestamp: '18 may 2025 , 3:20 PM',
+      severity: 'details',
+      actor: 'Michael Chen',
+      detailsText: 'Supplier logistics profile compiled in Odoo bridge database. GST and contact credentials verification pending.'
+    },
+    {
+      id: 'log-5',
+      type: 'Invoices',
+      title: 'Invoice generated',
+      detail: 'PO-2025-0068 invoice draft synched to Odoo',
+      timestamp: '24 May 2025, 1:45 PM',
+      severity: 'success',
+      actor: 'Odoo API Agent',
+      detailsText: 'Automated invoice mapping run completed. Transferred $21,480 billing record to Odoo financial module.'
+    },
+    {
+      id: 'log-6',
+      type: 'RFQ',
+      title: 'RFQ draft saved',
+      detail: 'office supplies procurement q3',
+      timestamp: '17 May 2025, 11:30 AM',
+      severity: 'info',
+      actor: 'Alexander Wright',
+      detailsText: 'Saved RFQ specs draft locally in browser storage. Pre-populated 14 items.'
+    },
+    {
+      id: 'log-7',
+      type: 'Invoices',
+      title: 'Invoice paid',
+      detail: 'Shopify retailer invoice settled',
+      timestamp: '15 May 2025, 4:10 PM',
+      severity: 'success',
+      actor: 'Manager DevOps',
+      detailsText: 'Payment validation webhook received from Shopify integration. Marked status as Paid.'
+    },
+    {
+      id: 'log-8',
+      type: 'Vendors',
+      title: 'Connection failed',
+      detail: 'Target supply chain credential renewal required',
+      timestamp: '10 May 2025, 10:20 AM',
+      severity: 'danger',
+      actor: 'Walmart Sync Agent',
+      detailsText: 'API handshake returned 401 Unauthorized status code. Connection credentials or token keys expired.'
+    },
+    {
+      id: 'log-9',
+      type: 'RFQ',
+      title: 'RFQ closed',
+      detail: 'tech server hardware procurement bids collection closed',
+      timestamp: '08 May 2025, 5:00 PM',
+      severity: 'warning',
+      actor: 'Sarah Jenkins',
+      detailsText: 'Deadline reached. Closed quotation reception portal. Commencing comparison matrix compilation.'
+    }
+  ]);
+
+  // --- Search & Filter States ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('All'); // 'All', 'RFQ', 'Approvals', 'Invoices', 'Vendors'
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  // --- Dynamic Tab Counts ---
+  const counts = {
+    All: logs.length,
+    RFQ: logs.filter(l => l.type === 'RFQ').length,
+    Approvals: logs.filter(l => l.type === 'Approvals').length,
+    Invoices: logs.filter(l => l.type === 'Invoices').length,
+    Vendors: logs.filter(l => l.type === 'Vendors').length
+  };
+
+  // --- Filtering Logic ---
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = 
+      log.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.detail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.timestamp.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (activeTab === 'All') return matchesSearch;
+    return matchesSearch && log.type.toLowerCase() === activeTab.toLowerCase();
+  });
+
+  // --- Get Icon based on Severity/Type ---
+  const getLogIconConfig = (log) => {
+    switch (log.severity) {
+      case 'success':
+        return {
+          icon: Check,
+          color: '#34d399',
+          border: '1.5px solid #34d399',
+          bg: 'rgba(16, 185, 129, 0.08)'
+        };
+      case 'warning':
+        return {
+          icon: Clock,
+          color: '#38bdf8',
+          border: '1.5px solid #38bdf8',
+          bg: 'rgba(56, 189, 248, 0.08)'
+        };
+      case 'danger':
+        return {
+          icon: AlertTriangle,
+          color: '#f87171',
+          border: '1.5px solid #f87171',
+          bg: 'rgba(239, 68, 68, 0.08)'
+        };
+      case 'details':
+        return {
+          icon: Users,
+          color: '#c084fc',
+          border: '1.5px solid #c084fc',
+          bg: 'rgba(192, 132, 252, 0.08)'
+        };
+      case 'info':
+      default:
+        return {
+          icon: FileText,
+          color: '#38bdf8',
+          border: '1.5px solid #38bdf8',
+          bg: 'rgba(56, 189, 248, 0.08)'
+        };
+    }
+  };
+
+  return (
+    <div className="activity-logs-wrapper animate-fade-in" style={styles.container}>
+      <style>{customCSS}</style>
+
+      {/* Title Header matching Screenshot */}
+      <header style={styles.header}>
+        <div>
+          <h2 style={styles.title}>Activity & Logs</h2>
+          <p style={styles.subtitle}>Procurement audit trail</p>
+        </div>
+      </header>
+
+      {/* Curved Search Input */}
+      <div style={styles.searchContainer}>
+        <div style={styles.searchBarWrapper}>
+          <Search size={18} style={styles.searchIcon} />
+          <input
+            type="text"
+            placeholder="Search bar ...... search by category, details, timestamp..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={styles.searchInput}
+          />
+        </div>
+      </div>
+
+      {/* Curved border navigation tab buttons */}
+      <div style={styles.tabsContainer}>
+        {[
+          { key: 'All', label: 'All' },
+          { key: 'RFQ', label: 'RFQ' },
+          { key: 'Approvals', label: 'Approvals' },
+          { key: 'Invoices', label: 'Invoices' },
+          { key: 'Vendors', label: 'Vendors' }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => {
+              setActiveTab(tab.key);
+              setSelectedLog(null);
+            }}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === tab.key ? styles.tabBtnActive : {})
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Split Screen Master-Detail Layout */}
+      <div style={styles.splitLayout}>
+        
+        {/* Left Side: Audit Trail Feed list */}
+        <div style={{
+          flex: selectedLog ? '1 1 62%' : '1 1 100%',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          minWidth: 0
+        }}>
+          <div className="glass-panel logs-list-card" style={styles.listCard}>
+            {filteredLogs.map(log => {
+              const iconConfig = getLogIconConfig(log);
+              const LogIcon = iconConfig.icon;
+              const isSelected = selectedLog && selectedLog.id === log.id;
+
+              return (
+                <div 
+                  key={log.id} 
+                  onClick={() => setSelectedLog(log)}
+                  className="log-row-item"
+                  style={{
+                    ...styles.logRow,
+                    background: isSelected ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                    borderLeft: isSelected ? '3px solid var(--primary)' : '3px solid transparent'
+                  }}
+                >
+                  {/* Left Circular Icon Node */}
+                  <div 
+                    style={{
+                      ...styles.iconCircle,
+                      borderColor: iconConfig.color,
+                      background: iconConfig.bg
+                    }}
+                  >
+                    <LogIcon size={18} color={iconConfig.color} />
+                  </div>
+
+                  {/* Mid Log Description */}
+                  <div style={styles.logMetaContent}>
+                    <div style={styles.logTitleRow}>
+                      <span style={styles.logTitle}>{log.title}</span>
+                      <span style={styles.logDetail}>- {log.detail}</span>
+                    </div>
+                    <span style={styles.logTimestamp}>{log.timestamp}</span>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {filteredLogs.length === 0 && (
+              <div style={styles.emptyText}>
+                No audit logs match filters.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Side: Detailed logs viewer panel drawer */}
+        {selectedLog && (
+          <div className="glass-panel animate-slide-down" style={styles.detailBoxPanel}>
+            <div style={styles.detailHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Info size={16} color="var(--primary)" />
+                <h3 style={styles.detailHeaderTitle}>Audit Log Details</h3>
+              </div>
+              <button style={styles.closeBtn} onClick={() => setSelectedLog(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={styles.detailScrollArea}>
+              
+              {/* Profile Card */}
+              <div style={styles.detailSectionCard}>
+                <span style={styles.detailMetaLabel}>Log Title</span>
+                <h4 style={{ fontSize: '1rem', color: '#ffffff', margin: 0, fontWeight: '700' }}>
+                  {selectedLog.title}
+                </h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
+                  {selectedLog.detail}
+                </p>
+              </div>
+
+              {/* Coordinates specs */}
+              <div style={styles.detailSectionCard}>
+                <h5 style={styles.sectionTitle}>Audit Context</h5>
+                
+                <div style={styles.gridItem}>
+                  <span style={styles.gridLabel}>Activity Type</span>
+                  <span className="badge badge-primary" style={{ alignSelf: 'flex-start', fontSize: '0.75rem', marginTop: '2px' }}>
+                    {selectedLog.type}
+                  </span>
+                </div>
+
+                <div style={styles.gridItem}>
+                  <span style={styles.gridLabel}>Timestamp</span>
+                  <span style={styles.gridValue}>{selectedLog.timestamp}</span>
+                </div>
+
+                <div style={styles.gridItem}>
+                  <span style={styles.gridLabel}>Initiated By (Actor)</span>
+                  <span style={styles.gridValue}>{selectedLog.actor}</span>
+                </div>
+              </div>
+
+              {/* Full description */}
+              <div style={styles.detailSectionCard}>
+                <h5 style={styles.sectionTitle}>Execution Payload Description</h5>
+                <p style={styles.descText}>
+                  {selectedLog.detailsText}
+                </p>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// Scoped custom CSS rules
+const customCSS = `
+  .log-row-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 1.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .log-row-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .log-row-item:last-child {
+    border-bottom: none;
+  }
+`;
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: '2rem',
+    fontWeight: 700,
+    color: 'var(--text-main)',
+    margin: 0,
+  },
+  subtitle: {
+    color: 'var(--text-muted)',
+    fontSize: '1rem',
+    marginTop: '0.2rem',
+  },
+  searchContainer: {
+    width: '100%',
+  },
+  searchBarWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    background: 'rgba(0, 0, 0, 0.25)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '24px',
+    padding: '8px 16px',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+  },
+  searchIcon: {
+    color: 'var(--text-dark)',
+    marginRight: '10px',
+  },
+  searchInput: {
+    flex: 1,
+    background: 'none',
+    border: 'none',
+    color: '#ffffff',
+    fontSize: '0.9rem',
+    outline: 'none',
+    fontFamily: 'inherit',
+    height: '24px',
+  },
+  tabsContainer: {
+    display: 'flex',
+    gap: '10px',
+    flexWrap: 'wrap',
+    marginTop: '0.2rem',
+  },
+  tabBtn: {
+    background: 'none',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    color: 'var(--text-muted)',
+    padding: '6px 18px',
+    borderRadius: '20px',
+    fontSize: '0.82rem',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.25s ease',
+  },
+  tabBtnActive: {
+    borderColor: '#ffffff',
+    color: '#ffffff',
+    background: 'rgba(255, 255, 255, 0.05)',
+  },
+  splitLayout: {
+    display: 'flex',
+    gap: '1.5rem',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  listCard: {
+    padding: 0,
+    overflow: 'hidden',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '16px',
+  },
+  logRow: {
+    // Handled by hover transitions
+  },
+  iconCircle: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    border: '1.5px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  logMetaContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  logTitleRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: '6px',
+  },
+  logTitle: {
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  logDetail: {
+    fontSize: '0.9rem',
+    color: 'var(--text-muted)',
+  },
+  logTimestamp: {
+    fontSize: '0.75rem',
+    color: 'var(--text-dark)',
+  },
+  emptyText: {
+    textAlign: 'center',
+    padding: '3rem',
+    color: 'var(--text-dark)',
+    fontSize: '0.9rem',
+  },
+
+  // Detail panel styling
+  detailBoxPanel: {
+    flex: '0 0 38%',
+    background: 'var(--bg-card)',
+    backdropFilter: 'var(--glass-blur)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '16px',
+    padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.2rem',
+    position: 'sticky',
+    top: '20px',
+    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+  },
+  detailHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    paddingBottom: '12px',
+  },
+  detailHeaderTitle: {
+    fontSize: '1.1rem',
+    fontWeight: 700,
+    color: '#ffffff',
+    margin: 0,
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-dark)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailScrollArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.2rem',
+    maxHeight: 'calc(100vh - 280px)',
+    overflowY: 'auto',
+  },
+  detailSectionCard: {
+    background: 'rgba(255, 255, 255, 0.01)',
+    border: '1px solid rgba(255, 255, 255, 0.04)',
+    borderRadius: '12px',
+    padding: '1rem 1.2rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  detailMetaLabel: {
+    display: 'block',
+    fontSize: '0.7rem',
+    color: 'var(--text-dark)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  sectionTitle: {
+    fontSize: '0.82rem',
+    textTransform: 'uppercase',
+    color: 'var(--text-muted)',
+    letterSpacing: '0.05em',
+    fontWeight: 600,
+    margin: '0 0 4px 0',
+  },
+  gridItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    marginBottom: '8px',
+  },
+  gridLabel: {
+    fontSize: '0.72rem',
+    color: 'var(--text-dark)',
+    textTransform: 'uppercase',
+  },
+  gridValue: {
+    fontSize: '0.85rem',
+    color: '#ffffff',
+    fontWeight: 500,
+  },
+  descText: {
+    fontSize: '0.82rem',
+    color: 'var(--text-muted)',
+    lineHeight: '1.5',
+    margin: 0,
+    fontStyle: 'italic',
+  }
+};
