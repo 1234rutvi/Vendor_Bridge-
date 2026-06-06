@@ -10,7 +10,9 @@ import {
   RefreshCw, 
   Search, 
   DollarSign, 
-  User
+  User,
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 
 // Roles greeting translation mapping
@@ -37,11 +39,22 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
     { id: 'app-3', title: 'Warehouse Storage Rack Installation', vendor: 'OfficeNeed Co', amount: 8900, requestor: 'Elena Rostova', date: '2026-06-04', type: 'Contract Approval' }
   ]);
 
-  const [rfqs, setRfqs] = useState([
-    { id: 'rfq-1', rfqNo: 'RFQ-2026-008', title: 'High-Capacity SSDs & RAM Blocks', vendorCount: 4, deadline: '2026-06-12', status: 'Bidding Open', budget: 15000 },
-    { id: 'rfq-2', rfqNo: 'RFQ-2026-009', title: 'Ergonomic Standing Desks Phase 2', vendorCount: 2, deadline: '2026-06-18', status: 'Draft', budget: 6500 },
-    { id: 'rfq-3', rfqNo: 'RFQ-2026-010', title: 'Custom Aluminum Extrusion Brackets', vendorCount: 5, deadline: '2026-06-10', status: 'Bids Received', budget: 24000 }
-  ]);
+  const [rfqs, setRfqs] = useState([]);
+
+  useEffect(() => {
+    const fetchRfqs = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/rfqs');
+        if (res.ok) {
+          const data = await res.json();
+          setRfqs(data.map(r => ({ ...r, id: r._id || r.id })));
+        }
+      } catch (err) {
+        console.error('Error fetching RFQs:', err);
+      }
+    };
+    fetchRfqs();
+  }, []);
 
   const [purchaseOrders, setPurchaseOrders] = useState([
     { id: 'po-1', poNo: 'PO-2026-091', vendor: 'Infra', amount: 87000, date: '2026-06-06', status: 'Approved', syncStatus: 'synced' },
@@ -109,9 +122,9 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
   // --- Odoo Sync Monitor ---
   useEffect(() => {
     if (isSyncing) {
-      showToast('Connecting Odoo v17 Bridge: Syncing procurement databases...', 'info');
+      showToast('Connecting Integration Bridge: Syncing procurement databases...', 'info');
     } else if (stats.lastSync && stats.lastSync !== 'Never') {
-      showToast('Odoo bridge databases synchronized successfully!', 'success');
+      showToast('Bridge databases synchronized successfully!', 'success');
       // Randomly mock pull of a new purchase order or invoice from Odoo
       if (Math.random() > 0.4) {
         const vendorsList = ['Amazon US Marketplace', 'Shopify Storefront (Retail)', 'Walmart Wholesale Portal'];
@@ -167,22 +180,20 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
   const handlePayInvoice = (id, invNo) => {
     setInvoices(prev => prev.map(inv => {
       if (inv.id === id) {
-        showToast(`Invoice ${invNo} marked as Paid & queued for Odoo reconciliation.`);
+        showToast(`Invoice ${invNo} marked as Paid & queued for database reconciliation.`);
         return { ...inv, status: 'Paid' };
       }
       return inv;
     }));
   };
 
-  // --- Create RFQ Form Submission ---
-  const handleCreateRfq = (e) => {
+  const handleCreateRfq = async (e) => {
     e.preventDefault();
     if (!newRfqData.title || !newRfqData.deadline) {
       showToast('Please specify a Title and Deadline.', 'error');
       return;
     }
     const newRfq = {
-      id: `rfq-${Date.now()}`,
       rfqNo: `RFQ-2026-0${rfqs.length + 9}`,
       title: newRfqData.title,
       vendorCount: 0,
@@ -190,11 +201,27 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
       status: 'Draft',
       budget: Number(newRfqData.budget) || 0
     };
-    setRfqs(prev => [newRfq, ...prev]);
-    setShowRfqModal(false);
-    setNewRfqData({ title: '', budget: '', vendor: '', deadline: '' });
-    setActiveTab('rfqs');
-    showToast(`Successfully created ${newRfq.rfqNo}!`);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/rfqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRfq)
+      });
+      if (res.ok) {
+        const savedRfq = await res.json();
+        setRfqs(prev => [{ ...savedRfq, id: savedRfq._id || savedRfq.id }, ...prev]);
+        setShowRfqModal(false);
+        setNewRfqData({ title: '', budget: '', vendor: '', deadline: '' });
+        setActiveTab('rfqs');
+        showToast(`Successfully created ${savedRfq.rfqNo}!`);
+      } else {
+        showToast('Failed to save RFQ to database.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Could not connect to database to save RFQ.', 'error');
+    }
   };
 
   // --- Filter Logic for Activity Lists ---
@@ -262,7 +289,7 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
       <div style={styles.header}>
         <div style={styles.headerLeft}>
           <h1 style={styles.title}>Procurement Dashboard</h1>
-          <p style={styles.subtitle}>Welcome back, {roleLabel} - Real-time Odoo & Vendor Bridge monitoring</p>
+          <p style={styles.subtitle}>Welcome back, {roleLabel} - Real-time Vendor Bridge monitoring</p>
         </div>
         <div style={styles.headerRight}>
           <button 
@@ -272,7 +299,7 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
             style={styles.syncBtn}
           >
             <RefreshCw size={15} style={isSyncing ? styles.spinning : {}} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Odoo'}</span>
+            <span>{isSyncing ? 'Syncing...' : 'Sync Database'}</span>
           </button>
         </div>
       </div>
@@ -767,7 +794,17 @@ export default function DashboardOverview({ currentUser, onNavigate, stats = {},
 
               <button className="quick-action-btn" onClick={triggerSync} disabled={isSyncing}>
                 <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                <span>Odoo Sync</span>
+                <span>Sync Database</span>
+              </button>
+
+              <button className="quick-action-btn" onClick={() => onNavigate('ai-recommendation')}>
+                <Sparkles size={16} color="#fbbf24" />
+                <span>AI Recommender</span>
+              </button>
+
+              <button className="quick-action-btn" onClick={() => onNavigate('reports')}>
+                <BarChart3 size={16} color="#38bdf8" />
+                <span>Reports</span>
               </button>
             </div>
           </div>
