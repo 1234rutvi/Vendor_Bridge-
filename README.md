@@ -1,11 +1,13 @@
 VendorBridge
 Procurement & Vendor Management ERP
+
 The vision for VendorBridge is to simplify and digitize procurement operations for
 organizations through a centralized ERP platform that manages vendors, RFQs,
 quotations, approvals, purchase orders, and invoice generation.
 The platform aims to reduce manual procurement inefficiencies by enabling
 structured workflows, centralized vendor communication, and real-time
 procurement tracking.
+
 VendorBridge focuses on delivering core ERP functionalities with clean
 architecture, role-based workflows, and scalable module design.
 Design and develop a Procurement & Vendor Management ERP where
@@ -20,9 +22,11 @@ organizations can:
 ● Print invoices
 ● Send invoices through email
 ● Track procurement activities
+
 The application must demonstrate proper ERP architecture, reusable modules,
 secure workflows, and intuitive UI/UX while handling procurement relationships
 between vendors, quotations, approvals, purchase orders, and invoices.
+
 Overall Vision
 Problem Statement
 1. Login / Signup Screen
@@ -35,6 +39,7 @@ Key Functionalities
 ● Session handling
 ● Validation
 ● Role-based authentication
+
 2. Dashboard / Home Screen
 Purpose
 Allow users to quickly monitor procurement activities.
@@ -45,6 +50,7 @@ Key Functionalities
 ● Recent invoices
 ● Analytics cards
 ● Quick action buttons
+
 3. Vendor Management Screen
 Purpose
 Maintain organized vendor records.
@@ -55,6 +61,7 @@ Key Functionalities
 ● Contact details
 ● Search & filtering
 Features
+
 4. RFQ Creation Screen
 Purpose
 Initiate procurement workflows efficiently.
@@ -65,6 +72,7 @@ Key Functionalities
 ● Attachments
 ● Deadline selection
 ● Vendor assignment
+
 5. Vendor Quotation Submission Screen
 Purpose
 Allow vendors to respond to procurement requests.
@@ -74,6 +82,7 @@ Key Functionalities
 ● Notes/comments
 ● Editable quotations
 ● Quotation submission
+
 6. Quotation Comparison Screen
 Purpose
 Help procurement teams select the most suitable vendor.
@@ -83,6 +92,7 @@ Key Functionalities
 ● Delivery timeline comparison
 ● Vendor rating indicators
 ● Sorting & filtering
+
 7. Approval Workflow Screen
 Purpose
 Ensure structured procurement approvals.
@@ -92,6 +102,7 @@ Key Functionalities
 ● Approval timeline
 ● Status tracking
 ● Workflow state transitions
+
 8. Purchase Order & Invoice Generation Screen
 Purpose
 Convert approved quotations into official procurement documents.
@@ -104,6 +115,7 @@ Key Functionalities
 ● Print invoice
 ● Send invoice via email
 ● Status updates
+
 9. Activity Logs & Notifications Screen
 Purpose
 Keep users informed about procurement updates.
@@ -113,30 +125,37 @@ Key Functionalities
 ● Invoice updates
 ● Activity timeline
 ● Audit logs
+
 10. Reports & Analytics Screen
 Purpose
 Provide procurement insights and trends.
+
 Key Functionalities
 ● Vendor performance analytics & Exportable reports
 ● Procurement statistics
 ● Spending summaries
 ● Monthly procurement trends
+
 Procurement Officer
 ● Create RFQs
 ● Compare quotations
 ● Generate purchase orders
 ● Generate invoices
+
 Vendor
 ● Submit quotations
 ● Track RFQ status
 ● View purchase orders
+
 Manager / Approver
 ● Approve or reject procurement requests
 ● Monitor procurement workflows
+
 Admin
 ● Manage users
 ● Manage vendors
 ● View procurement analytics
+
 User Roles
 Basic Workflow
 1. Procurement Officer creates an RFQ.
